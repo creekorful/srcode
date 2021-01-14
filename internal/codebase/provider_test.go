@@ -148,15 +148,26 @@ func TestProvider_Clone(t *testing.T) {
 	manifestProviderMock.EXPECT().
 		Read(filepath.Join(targetDir, metaDir, manifestFile)).
 		Return(manifest.Manifest{Projects: map[string]manifest.Project{
-			"test/12":      {Remote: "https://example.org/test.git"},
-			"test-another": {Remote: "git@example.org:example/test.git"},
+			"test/12": {
+				Remote: "https://example.org/test.git",
+				Config: map[string]string{"user.name": "Aloïs Micard"},
+			},
+			"test-another": {
+				Remote: "git@example.org:example/test.git",
+				Config: map[string]string{"user.email": "alois@micard.lu"},
+			},
 		}}, nil)
 
-	// We should clone the projects
+	// We should clone the projects & configure them
+	repoMock := repository_mock.NewMockRepository(mockCtrl)
 	repoProviderMock.EXPECT().
-		Clone("https://example.org/test.git", filepath.Join(targetDir, "test", "12")).Return(nil, nil)
+		Clone("https://example.org/test.git", filepath.Join(targetDir, "test", "12")).Return(repoMock, nil)
+	repoMock.EXPECT().SetConfig("user.name", "Aloïs Micard").Return(nil)
+
+	repoMock = repository_mock.NewMockRepository(mockCtrl)
 	repoProviderMock.EXPECT().
-		Clone("git@example.org:example/test.git", filepath.Join(targetDir, "test-another")).Return(nil, nil)
+		Clone("git@example.org:example/test.git", filepath.Join(targetDir, "test-another")).Return(repoMock, nil)
+	repoMock.EXPECT().SetConfig("user.email", "alois@micard.lu").Return(nil)
 
 	val, err := provider.Clone("test-remote", targetDir)
 	if err != nil {

@@ -135,10 +135,17 @@ func (provider *provider) Clone(url, path string) (Codebase, error) {
 		return nil, err
 	}
 
-	// Clone back project
+	// Clone back project & configure them if needed
 	for projectPath, project := range projects {
-		if _, err := provider.repoProvider.Clone(project.Remote, filepath.Join(path, projectPath)); err != nil {
+		repo, err := provider.repoProvider.Clone(project.Remote, filepath.Join(path, projectPath))
+		if err != nil {
 			return nil, err
+		}
+
+		for key, value := range project.Config {
+			if err := repo.SetConfig(key, value); err != nil {
+				return nil, err
+			}
 		}
 	}
 
