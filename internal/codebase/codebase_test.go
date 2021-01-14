@@ -189,6 +189,7 @@ func TestCodebase_Sync(t *testing.T) {
 		Return(manifest.Manifest{
 			Projects: map[string]manifest.Project{
 				"test/a/b": {Remote: "test.git"},
+				"test/c/d": {Remote: "test.git"},
 			},
 		}, nil)
 
@@ -199,13 +200,33 @@ func TestCodebase_Sync(t *testing.T) {
 		Read(filepath.Join(dir, metaDir, manifestFile)).
 		Return(manifest.Manifest{
 			Projects: map[string]manifest.Project{
-				"test-12": {Remote: "test.git"},
+				"test-12": {
+					Remote: "test.git",
+					Config: map[string]string{
+						"user.name": "Aloïs Micard",
+					},
+				},
+				"test/c/d": {
+					Remote: "test.git",
+					Config: map[string]string{
+						"user.mail": "alois@micard.lu",
+					},
+				},
 			},
 		}, nil)
 
+	// should clone missing projects
 	repoProviderMock.EXPECT().
 		Clone("test.git", filepath.Join(dir, "test-12")).
 		Return(nil, nil)
+
+	cRepoMock := repository_mock.NewMockRepository(mockCtrl)
+	repoProviderMock.EXPECT().Open(filepath.Join(dir, "test-12")).Return(cRepoMock, nil)
+	cRepoMock.EXPECT().SetConfig("user.name", "Aloïs Micard").Return(nil) // restore config
+
+	cRepoMock = repository_mock.NewMockRepository(mockCtrl)
+	repoProviderMock.EXPECT().Open(filepath.Join(dir, "test/c/d")).Return(cRepoMock, nil)
+	cRepoMock.EXPECT().SetConfig("user.mail", "alois@micard.lu").Return(nil)
 
 	added, deleted, err := codebase.Sync(true)
 	if err != nil {

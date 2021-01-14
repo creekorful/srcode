@@ -129,6 +129,20 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 				// Clone the project (and don't break in case of error)
 				_, _ = codebase.repoProvider.Clone(project.Remote, filepath.Join(codebase.directory, p))
 			}
+
+			if len(project.Config) > 0 {
+				repo, err := codebase.repoProvider.Open(filepath.Join(codebase.directory, p))
+				if err != nil {
+					return nil, nil, err
+				}
+
+				// No matter what re-apply configuration to currently defined projects
+				for key, value := range project.Config {
+					if err := repo.SetConfig(key, value); err != nil {
+						return nil, nil, err
+					}
+				}
+			}
 		}
 
 		// Collect removed projects
