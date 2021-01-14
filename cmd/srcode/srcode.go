@@ -36,6 +36,11 @@ func main() {
 				Action:    addProject,
 				ArgsUsage: "<remote> [<path>]",
 			},
+			{
+				Name:   "sync",
+				Usage:  "Synchronize the codebase",
+				Action: syncCodebase,
+			},
 		},
 	}
 
@@ -113,6 +118,35 @@ func addProject(c *cli.Context) error {
 	}
 
 	fmt.Printf("Successfully added %s to: %s\n", c.Args().First(), path)
+
+	return nil
+}
+
+func syncCodebase(c *cli.Context) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	cb, err := codebase.DefaultProvider.Open(cwd)
+	if err != nil {
+		return err
+	}
+
+	added, removed, err := cb.Sync()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("Successfully synchronized codebase")
+
+	for path, project := range added {
+		fmt.Printf("[+] %s -> %s\n", project.Remote, path)
+	}
+
+	for path, project := range removed {
+		fmt.Printf("[-] %s -> %s\n", project.Remote, path)
+	}
 
 	return nil
 }

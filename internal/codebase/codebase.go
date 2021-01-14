@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/creekorful/srcode/internal/repository"
+	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
@@ -16,6 +18,8 @@ var ErrPathTaken = errors.New("a project already exist at given path")
 type Codebase interface {
 	Projects() (map[string]manifest.Project, error)
 	Add(remote, path string) error
+
+	Sync() (map[string]manifest.Project, map[string]manifest.Project, error)
 }
 
 type codebase struct {
@@ -73,6 +77,76 @@ func (codebase *codebase) Add(remote, path string) error {
 	}
 
 	return nil
+}
+
+func (codebase *codebase) Sync() (map[string]manifest.Project, map[string]manifest.Project, error) {
+	// read manifest
+	previousMan, err := codebase.readManifest()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// pull & push
+	// Allow to fail because may fail if not already pushed (todo better)
+	_ = codebase.repo.Pull("origin", "master")
+
+	if err := codebase.repo.Push("origin", "master"); err != nil {
+		return nil, nil, err
+	}
+
+	// read again manifest
+	man, err := codebase.readManifest()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// apply changes (if there are)
+	if !reflect.DeepEqual(previousMan, man) {
+		// Collect new projects
+		addedProjects := map[string]manifest.Project{}
+		for p, project := range man.Projects {
+			found := false
+			for previousPath, _ := range previousMan.Projects {
+				if p == previousPath {
+					found = true
+					break
+				}
+			}
+
+			// project not found in previous manifest
+			if !found {
+				addedProjects[p] = project
+
+				// Clone the project (and don't break in case of error)
+				_, _ = codebase.repoProvider.Clone(project.Remote, filepath.Join(codebase.directory, p))
+			}
+		}
+
+		// Collect removed projects
+		removedProjects := map[string]manifest.Project{}
+		for previousPath, previousProject := range previousMan.Projects {
+			found := false
+			for p, _ := range man.Projects {
+				if p == previousPath {
+					found = true
+					break
+				}
+			}
+
+			// project not found in current manifest
+			if !found {
+				removedProjects[previousPath] = previousProject
+
+				// Remove from disk (and don't break in case of error)
+				// TODO ask to remove using flag
+				_ = os.RemoveAll(filepath.Join(codebase.directory, previousPath))
+			}
+		}
+
+		return addedProjects, removedProjects, nil
+	}
+
+	return nil, nil, nil
 }
 
 func (codebase *codebase) readManifest() (manifest.Manifest, error) {

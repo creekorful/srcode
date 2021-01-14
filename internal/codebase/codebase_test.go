@@ -131,3 +131,54 @@ func TestCodebase_Add_PathTaken(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestCodebase_Sync(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+	repoMock := repository_mock.NewMockRepository(mockCtrl)
+
+	codebase := &codebase{
+		repoProvider: repoProviderMock,
+		repo:         repoMock,
+		manProvider:  manProviderMock,
+		directory:    "/home/creekorful",
+	}
+
+	manProviderMock.EXPECT().
+		Read("/home/creekorful/.srcode/manifest.json").
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/a/b": {Remote: "test.git"},
+			},
+		}, nil)
+
+	repoMock.EXPECT().Pull("origin", "main").Return(nil)
+	repoMock.EXPECT().Push("origin", "main").Return(nil)
+
+	manProviderMock.EXPECT().
+		Read("/home/creekorful/.srcode/manifest.json").
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test-12": {Remote: "test.git"},
+			},
+		}, nil)
+
+	repoProviderMock.EXPECT().
+		Clone("test.git", "/home/creekorful/test-12").
+		Return(nil, nil)
+
+	added, deleted, err := codebase.Sync()
+	if err != nil {
+		t.FailNow()
+	}
+
+	if len(added) != 1 {
+		t.Fail()
+	}
+	if len(deleted) != 1 {
+		t.Fail()
+	}
+}

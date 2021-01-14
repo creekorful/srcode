@@ -6,6 +6,8 @@ import "os/exec"
 
 type Repository interface {
 	CommitFiles(message string, files ...string) error
+	Push(repo, refspec string) error
+	Pull(repo, refspec string) error
 }
 
 type gitWrapperRepository struct {
@@ -22,6 +24,16 @@ func (gwr *gitWrapperRepository) CommitFiles(message string, files ...string) er
 	}
 
 	return nil
+}
+
+func (gwr *gitWrapperRepository) Push(repo, refspec string) error {
+	_, err := gwr.execWithOutput("push", repo, refspec)
+	return err
+}
+
+func (gwr *gitWrapperRepository) Pull(repo, refspec string) error {
+	_, err := gwr.execWithOutput("pull", "--rebase", repo, refspec)
+	return err
 }
 
 func (gwr *gitWrapperRepository) execWithOutput(args ...string) (string, error) {
