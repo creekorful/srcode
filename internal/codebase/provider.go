@@ -27,7 +27,7 @@ const (
 )
 
 type Provider interface {
-	Init(path string) (Codebase, error)
+	Init(path, remote string) (Codebase, error)
 	Open(path string) (Codebase, error)
 	Clone(url, path string) (Codebase, error)
 }
@@ -37,7 +37,7 @@ type provider struct {
 	manifestProvider manifest.Provider
 }
 
-func (provider *provider) Init(path string) (Codebase, error) {
+func (provider *provider) Init(path, remote string) (Codebase, error) {
 	exist, err := codebaseExists(path)
 	if err != nil {
 		return nil, err
@@ -70,6 +70,13 @@ func (provider *provider) Init(path string) (Codebase, error) {
 	// Create initial commit
 	if err := repo.CommitFiles("Initial commit", manifestFile); err != nil {
 		return nil, err
+	}
+
+	// Set remote if provided
+	if remote != "" {
+		if err := repo.AddRemote("origin", remote); err != nil {
+			return nil, err
+		}
 	}
 
 	return &codebase{

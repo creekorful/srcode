@@ -8,6 +8,7 @@ type Repository interface {
 	CommitFiles(message string, files ...string) error
 	Push(repo, refspec string) error
 	Pull(repo, refspec string) error
+	AddRemote(name, url string) error
 }
 
 type gitWrapperRepository struct {
@@ -33,6 +34,11 @@ func (gwr *gitWrapperRepository) Push(repo, refspec string) error {
 
 func (gwr *gitWrapperRepository) Pull(repo, refspec string) error {
 	_, err := gwr.execWithOutput("pull", "--rebase", repo, refspec)
+	return err
+}
+
+func (gwr *gitWrapperRepository) AddRemote(name, url string) error {
+	_, err := gwr.execWithOutput("remote", "add", name, url)
 	return err
 }
 

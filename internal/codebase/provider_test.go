@@ -24,7 +24,7 @@ func TestProvider_Init(t *testing.T) {
 
 	// Repository provider fails
 	repoProviderMock.EXPECT().Init(filepath.Join(targetDir, metaDir)).Return(nil, errors.New("test error"))
-	if _, err := provider.Init(targetDir); err == nil {
+	if _, err := provider.Init(targetDir, ""); err == nil {
 		t.Error(err)
 	}
 
@@ -35,9 +35,11 @@ func TestProvider_Init(t *testing.T) {
 
 	// should create the initial commit
 	repoMock.EXPECT().CommitFiles("Initial commit", "manifest.json").Return(nil)
+	// should add remote
+	repoMock.EXPECT().AddRemote("origin", "git@github.com:creekorful/test.git").Return(nil)
 
 	repoProviderMock.EXPECT().Init(filepath.Join(targetDir, metaDir)).Return(repoMock, nil)
-	val, err := provider.Init(targetDir)
+	val, err := provider.Init(targetDir, "git@github.com:creekorful/test.git")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +64,7 @@ func TestProvider_New_CodebaseExist(t *testing.T) {
 		t.FailNow()
 	}
 
-	if _, err := provider.Init(targetDir); !errors.Is(err, ErrCodebaseAlreadyExist) {
+	if _, err := provider.Init(targetDir, ""); !errors.Is(err, ErrCodebaseAlreadyExist) {
 		t.Errorf("wrong error (got: %s, want: %s)", err, ErrCodebaseAlreadyExist)
 	}
 }

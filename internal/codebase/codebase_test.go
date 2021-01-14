@@ -155,8 +155,8 @@ func TestCodebase_Sync(t *testing.T) {
 			},
 		}, nil)
 
-	repoMock.EXPECT().Pull("origin", "main").Return(nil)
-	repoMock.EXPECT().Push("origin", "main").Return(nil)
+	repoMock.EXPECT().Pull("origin", "master").Return(nil)
+	repoMock.EXPECT().Push("origin", "master").Return(nil)
 
 	manProviderMock.EXPECT().
 		Read("/home/creekorful/.srcode/manifest.json").

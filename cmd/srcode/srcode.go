@@ -23,6 +23,12 @@ func main() {
 				Usage:     "Initialize a new codebase",
 				Action:    initCodebase,
 				ArgsUsage: "<path>",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:  "remote",
+						Usage: "The codebase remote",
+					},
+				},
 			},
 			{
 				Name:      "clone",
@@ -60,7 +66,7 @@ func initCodebase(c *cli.Context) error {
 		return err
 	}
 
-	if _, err := codebase.DefaultProvider.Init(filepath.Join(cwd, c.Args().First())); err != nil {
+	if _, err := codebase.DefaultProvider.Init(filepath.Join(cwd, c.Args().First()), c.String("remote")); err != nil {
 		return err
 	}
 
