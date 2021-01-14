@@ -14,6 +14,7 @@ func TestProvider_New(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+	repoMock := repository_mock.NewMockRepository(mockCtrl)
 
 	provider := provider{repoProvider: repoProviderMock}
 
@@ -25,10 +26,23 @@ func TestProvider_New(t *testing.T) {
 		t.Error(err)
 	}
 
-	repoProviderMock.EXPECT().New(filepath.Join(targetDir, metaDir)).Return(nil, nil)
+	// Delete the directory to cleanup the state
+	if err := os.RemoveAll(filepath.Join(targetDir, metaDir)); err != nil {
+		t.FailNow()
+	}
+
+	// should create the initial commit
+	repoMock.EXPECT().CommitFiles("Initial commit", "manifest.json").Return(nil)
+
+	repoProviderMock.EXPECT().New(filepath.Join(targetDir, metaDir)).Return(repoMock, nil)
 	val, err := provider.New(targetDir)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// should create manifest file
+	if _, err := os.Stat(filepath.Join(targetDir, metaDir, manifest)); err != nil {
+		t.Error(err)
 	}
 
 	if val.(*codebase).directory != targetDir {
