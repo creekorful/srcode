@@ -19,9 +19,16 @@ func main() {
 		}},
 		Commands: []*cli.Command{
 			{
-				Name:   "new",
-				Usage:  "Create a new codebase",
-				Action: newCodebase,
+				Name:      "new",
+				Usage:     "Create a new codebase",
+				Action:    newCodebase,
+				ArgsUsage: "<path>",
+			},
+			{
+				Name:      "clone",
+				Usage:     "Clone an existing codebase",
+				Action:    cloneCodebase,
+				ArgsUsage: "<remote> [<path>]",
 			},
 		},
 	}
@@ -33,7 +40,7 @@ func main() {
 }
 
 func newCodebase(c *cli.Context) error {
-	if !c.Args().Present() {
+	if c.Args().Len() == 1 {
 		return fmt.Errorf("correct usage: srcode new <path>")
 	}
 
@@ -47,6 +54,30 @@ func newCodebase(c *cli.Context) error {
 	}
 
 	fmt.Printf("Successfully created new codebase at: %s\n", c.Args().First())
+
+	return nil
+}
+
+func cloneCodebase(c *cli.Context) error {
+	if c.Args().Len() < 1 {
+		return fmt.Errorf("correct usage: srcode clone <remote> [<path>]")
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	path := cwd
+	if arg := c.Args().Get(1); arg != "" {
+		path = filepath.Join(path, arg)
+	}
+
+	if _, err := codebase.DefaultProvider.Clone(c.Args().First(), path); err != nil {
+		return nil
+	}
+
+	fmt.Printf("Successfully cloned codebase from %s to: %s\n", c.Args().First(), path)
 
 	return nil
 }
