@@ -2,6 +2,8 @@ package codebase
 
 import (
 	"errors"
+	"github.com/creekorful/srcode/internal/manifest"
+	"github.com/creekorful/srcode/internal/manifest_mock"
 	"github.com/creekorful/srcode/internal/repository_mock"
 	"github.com/golang/mock/gomock"
 	"os"
@@ -41,7 +43,7 @@ func TestProvider_New(t *testing.T) {
 	}
 
 	// should create manifest file
-	if _, err := os.Stat(filepath.Join(targetDir, metaDir, manifest)); err != nil {
+	if _, err := os.Stat(filepath.Join(targetDir, metaDir, manifestFile)); err != nil {
 		t.Error(err)
 	}
 
@@ -122,8 +124,9 @@ func TestProvider_Clone(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+	manifestProviderMock := manifest_mock.NewMockProvider(mockCtrl)
 
-	provider := provider{repoProvider: repoProviderMock}
+	provider := provider{repoProvider: repoProviderMock, manifestProvider: manifestProviderMock}
 
 	targetDir := filepath.Join(t.TempDir(), "test-directory")
 
@@ -138,6 +141,21 @@ func TestProvider_Clone(t *testing.T) {
 	repoProviderMock.EXPECT().
 		Clone("test-remote", filepath.Join(targetDir, metaDir)).
 		Return(nil, nil)
+
+	// Simulate dummy manifest
+	manifestProviderMock.EXPECT().
+		Read(filepath.Join(targetDir, metaDir, manifestFile)).
+		Return(manifest.Manifest{Projects: map[string]manifest.Project{
+			"test/12":      {Remote: "https://example.org/test.git"},
+			"test-another": {Remote: "git@example.org:example/test.git"},
+		}}, nil)
+
+	// We should clone the projects
+	repoProviderMock.EXPECT().
+		Clone("https://example.org/test.git", filepath.Join(targetDir, "test", "12")).Return(nil, nil)
+	repoProviderMock.EXPECT().
+		Clone("git@example.org:example/test.git", filepath.Join(targetDir, "test-another")).Return(nil, nil)
+
 	val, err := provider.Clone("test-remote", targetDir)
 	if err != nil {
 		t.Fail()

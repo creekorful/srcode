@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/creekorful/srcode/internal/repository"
 	"io/ioutil"
 	"os"
@@ -16,8 +17,8 @@ var (
 )
 
 const (
-	metaDir  = ".srcode"
-	manifest = "manifest.json"
+	metaDir      = ".srcode"
+	manifestFile = "manifest.json"
 )
 
 type Provider interface {
@@ -27,7 +28,8 @@ type Provider interface {
 }
 
 type provider struct {
-	repoProvider repository.Provider
+	repoProvider     repository.Provider
+	manifestProvider manifest.Provider
 }
 
 func (provider *provider) New(path string) (Codebase, error) {
@@ -51,17 +53,17 @@ func (provider *provider) New(path string) (Codebase, error) {
 	}
 
 	// create the meta file
-	b, err := json.Marshal(Manifest{})
+	b, err := json.Marshal(manifest.Manifest{})
 	if err != nil {
 		return nil, err
 	}
 
-	if err := ioutil.WriteFile(filepath.Join(path, metaDir, manifest), b, 0640); err != nil {
+	if err := ioutil.WriteFile(filepath.Join(path, metaDir, manifestFile), b, 0640); err != nil {
 		return nil, fmt.Errorf("error while creating manifest: %w", err)
 	}
 
 	// Create initial commit
-	if err := repo.CommitFiles("Initial commit", manifest); err != nil {
+	if err := repo.CommitFiles("Initial commit", manifestFile); err != nil {
 		return nil, err
 	}
 
@@ -105,12 +107,26 @@ func (provider *provider) Clone(url, path string) (Codebase, error) {
 		return nil, fmt.Errorf("error while cloning codebase: %w", err)
 	}
 
-	// TODO install projects
+	// Read the manifest
+	man, err := provider.manifestProvider.Read(filepath.Join(path, metaDir, manifestFile))
+	if err != nil {
+		return nil, fmt.Errorf("error while reading codebase manifest: %w", err)
+	}
 
-	return &codebase{
+	codebase := &codebase{
 		repo:      repo,
 		directory: path,
-	}, nil
+		manifest:  man,
+	}
+
+	// Clone back project
+	for projectPath, project := range codebase.Projects() {
+		if _, err := provider.repoProvider.Clone(project.Remote, filepath.Join(path, projectPath)); err != nil {
+			return nil, err
+		}
+	}
+
+	return codebase, nil
 }
 
 func codebaseExists(path string) (bool, error) {
