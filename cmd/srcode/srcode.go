@@ -46,6 +46,12 @@ func main() {
 				Name:   "sync",
 				Usage:  "Synchronize the codebase",
 				Action: syncCodebase,
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "delete-removed",
+						Usage: "Deleted removed projects",
+					},
+				},
 			},
 		},
 	}
@@ -139,7 +145,7 @@ func syncCodebase(c *cli.Context) error {
 		return err
 	}
 
-	added, removed, err := cb.Sync()
+	added, removed, err := cb.Sync(c.Bool("delete-removed"))
 	if err != nil {
 		return err
 	}

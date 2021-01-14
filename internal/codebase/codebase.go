@@ -19,7 +19,7 @@ type Codebase interface {
 	Projects() (map[string]manifest.Project, error)
 	Add(remote, path string) error
 
-	Sync() (map[string]manifest.Project, map[string]manifest.Project, error)
+	Sync(delete bool) (map[string]manifest.Project, map[string]manifest.Project, error)
 }
 
 type codebase struct {
@@ -79,7 +79,7 @@ func (codebase *codebase) Add(remote, path string) error {
 	return nil
 }
 
-func (codebase *codebase) Sync() (map[string]manifest.Project, map[string]manifest.Project, error) {
+func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[string]manifest.Project, error) {
 	// read manifest
 	previousMan, err := codebase.readManifest()
 	if err != nil {
@@ -138,8 +138,9 @@ func (codebase *codebase) Sync() (map[string]manifest.Project, map[string]manife
 				removedProjects[previousPath] = previousProject
 
 				// Remove from disk (and don't break in case of error)
-				// TODO ask to remove using flag
-				_ = os.RemoveAll(filepath.Join(codebase.directory, previousPath))
+				if delete {
+					_ = os.RemoveAll(filepath.Join(codebase.directory, previousPath))
+				}
 			}
 		}
 

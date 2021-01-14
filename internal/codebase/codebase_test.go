@@ -7,6 +7,7 @@ import (
 	"github.com/creekorful/srcode/internal/manifest_mock"
 	"github.com/creekorful/srcode/internal/repository_mock"
 	"github.com/golang/mock/gomock"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -140,15 +141,22 @@ func TestCodebase_Sync(t *testing.T) {
 	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
 	repoMock := repository_mock.NewMockRepository(mockCtrl)
 
+	dir := t.TempDir()
+
 	codebase := &codebase{
 		repoProvider: repoProviderMock,
 		repo:         repoMock,
 		manProvider:  manProviderMock,
-		directory:    "/home/creekorful",
+		directory:    dir,
+	}
+
+	// create mock directory
+	if err := os.MkdirAll(filepath.Join(dir, "test", "a", "b"), 0750); err != nil {
+		t.FailNow()
 	}
 
 	manProviderMock.EXPECT().
-		Read("/home/creekorful/.srcode/manifest.json").
+		Read(filepath.Join(dir, metaDir, manifestFile)).
 		Return(manifest.Manifest{
 			Projects: map[string]manifest.Project{
 				"test/a/b": {Remote: "test.git"},
@@ -159,7 +167,7 @@ func TestCodebase_Sync(t *testing.T) {
 	repoMock.EXPECT().Push("origin", "master").Return(nil)
 
 	manProviderMock.EXPECT().
-		Read("/home/creekorful/.srcode/manifest.json").
+		Read(filepath.Join(dir, metaDir, manifestFile)).
 		Return(manifest.Manifest{
 			Projects: map[string]manifest.Project{
 				"test-12": {Remote: "test.git"},
@@ -167,10 +175,10 @@ func TestCodebase_Sync(t *testing.T) {
 		}, nil)
 
 	repoProviderMock.EXPECT().
-		Clone("test.git", "/home/creekorful/test-12").
+		Clone("test.git", filepath.Join(dir, "test-12")).
 		Return(nil, nil)
 
-	added, deleted, err := codebase.Sync()
+	added, deleted, err := codebase.Sync(true)
 	if err != nil {
 		t.FailNow()
 	}
@@ -179,6 +187,11 @@ func TestCodebase_Sync(t *testing.T) {
 		t.Fail()
 	}
 	if len(deleted) != 1 {
+		t.Fail()
+	}
+
+	// make sure we have deleted the directory
+	if _, err := os.Stat(filepath.Join(dir, "test", "a", "b")); !os.IsNotExist(err) {
 		t.Fail()
 	}
 }
