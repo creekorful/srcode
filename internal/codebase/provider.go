@@ -14,6 +14,11 @@ import (
 var (
 	ErrCodebaseAlreadyExist = errors.New("a codebase already exist")
 	ErrCodebaseNotExist     = errors.New("no codebase found")
+
+	DefaultProvider = &provider{
+		repoProvider:     repository.DefaultProvider,
+		manifestProvider: &manifest.JsonProvider{},
+	}
 )
 
 const (
