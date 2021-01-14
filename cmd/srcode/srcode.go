@@ -19,9 +19,9 @@ func main() {
 		}},
 		Commands: []*cli.Command{
 			{
-				Name:      "new",
-				Usage:     "Create a new codebase",
-				Action:    newCodebase,
+				Name:      "init",
+				Usage:     "Initialize a new codebase",
+				Action:    initCodebase,
 				ArgsUsage: "<path>",
 			},
 			{
@@ -39,9 +39,9 @@ func main() {
 	}
 }
 
-func newCodebase(c *cli.Context) error {
+func initCodebase(c *cli.Context) error {
 	if c.Args().Len() == 1 {
-		return fmt.Errorf("correct usage: srcode new <path>")
+		return fmt.Errorf("correct usage: srcode init <path>")
 	}
 
 	cwd, err := os.Getwd()
@@ -49,11 +49,11 @@ func newCodebase(c *cli.Context) error {
 		return err
 	}
 
-	if _, err := codebase.DefaultProvider.New(filepath.Join(cwd, c.Args().First())); err != nil {
+	if _, err := codebase.DefaultProvider.Init(filepath.Join(cwd, c.Args().First())); err != nil {
 		return err
 	}
 
-	fmt.Printf("Successfully created new codebase at: %s\n", c.Args().First())
+	fmt.Printf("Successfully initialized new codebase at: %s\n", c.Args().First())
 
 	return nil
 }

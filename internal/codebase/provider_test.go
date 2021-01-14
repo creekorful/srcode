@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func TestProvider_New(t *testing.T) {
+func TestProvider_Init(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -23,8 +23,8 @@ func TestProvider_New(t *testing.T) {
 	targetDir := filepath.Join(t.TempDir(), "test-directory")
 
 	// Repository provider fails
-	repoProviderMock.EXPECT().New(filepath.Join(targetDir, metaDir)).Return(nil, errors.New("test error"))
-	if _, err := provider.New(targetDir); err == nil {
+	repoProviderMock.EXPECT().Init(filepath.Join(targetDir, metaDir)).Return(nil, errors.New("test error"))
+	if _, err := provider.Init(targetDir); err == nil {
 		t.Error(err)
 	}
 
@@ -36,8 +36,8 @@ func TestProvider_New(t *testing.T) {
 	// should create the initial commit
 	repoMock.EXPECT().CommitFiles("Initial commit", "manifest.json").Return(nil)
 
-	repoProviderMock.EXPECT().New(filepath.Join(targetDir, metaDir)).Return(repoMock, nil)
-	val, err := provider.New(targetDir)
+	repoProviderMock.EXPECT().Init(filepath.Join(targetDir, metaDir)).Return(repoMock, nil)
+	val, err := provider.Init(targetDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +62,7 @@ func TestProvider_New_CodebaseExist(t *testing.T) {
 		t.FailNow()
 	}
 
-	if _, err := provider.New(targetDir); !errors.Is(err, ErrCodebaseAlreadyExist) {
+	if _, err := provider.Init(targetDir); !errors.Is(err, ErrCodebaseAlreadyExist) {
 		t.Errorf("wrong error (got: %s, want: %s)", err, ErrCodebaseAlreadyExist)
 	}
 }

@@ -10,7 +10,7 @@ import (
 var DefaultProvider = &gitWrapperProvider{}
 
 type Provider interface {
-	New(path string) (Repository, error)
+	Init(path string) (Repository, error)
 	Open(path string) (Repository, error)
 	Clone(url, path string) (Repository, error)
 }
@@ -18,7 +18,7 @@ type Provider interface {
 type gitWrapperProvider struct {
 }
 
-func (gwp *gitWrapperProvider) New(path string) (Repository, error) {
+func (gwp *gitWrapperProvider) Init(path string) (Repository, error) {
 	cmd := exec.Command("git", "init", path)
 
 	if _, err := execWithOutput(cmd); err != nil {

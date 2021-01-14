@@ -27,7 +27,7 @@ const (
 )
 
 type Provider interface {
-	New(path string) (Codebase, error)
+	Init(path string) (Codebase, error)
 	Open(path string) (Codebase, error)
 	Clone(url, path string) (Codebase, error)
 }
@@ -37,7 +37,7 @@ type provider struct {
 	manifestProvider manifest.Provider
 }
 
-func (provider *provider) New(path string) (Codebase, error) {
+func (provider *provider) Init(path string) (Codebase, error) {
 	exist, err := codebaseExists(path)
 	if err != nil {
 		return nil, err
@@ -52,7 +52,7 @@ func (provider *provider) New(path string) (Codebase, error) {
 	}
 
 	// create git (meta) directory
-	repo, err := provider.repoProvider.New(filepath.Join(path, metaDir))
+	repo, err := provider.repoProvider.Init(filepath.Join(path, metaDir))
 	if err != nil {
 		return nil, fmt.Errorf("error while creating codebase at %s: %w", path, err)
 	}
