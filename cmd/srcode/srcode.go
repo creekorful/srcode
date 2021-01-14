@@ -30,6 +30,12 @@ func main() {
 				Action:    cloneCodebase,
 				ArgsUsage: "<remote> [<path>]",
 			},
+			{
+				Name:      "add",
+				Usage:     "Add a project",
+				Action:    addProject,
+				ArgsUsage: "<remote> [<path>]",
+			},
 		},
 	}
 
@@ -40,7 +46,7 @@ func main() {
 }
 
 func initCodebase(c *cli.Context) error {
-	if c.Args().Len() == 1 {
+	if c.Args().Len() != 1 {
 		return fmt.Errorf("correct usage: srcode init <path>")
 	}
 
@@ -78,6 +84,35 @@ func cloneCodebase(c *cli.Context) error {
 	}
 
 	fmt.Printf("Successfully cloned codebase from %s to: %s\n", c.Args().First(), path)
+
+	return nil
+}
+
+func addProject(c *cli.Context) error {
+	if c.Args().Len() < 1 {
+		return fmt.Errorf("correct usage: srcode add <remote> [<path>]")
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	path := ""
+	if arg := c.Args().Get(1); arg != "" {
+		path = arg
+	}
+
+	cb, err := codebase.DefaultProvider.Open(cwd)
+	if err != nil {
+		return err
+	}
+
+	if err := cb.Add(c.Args().First(), path); err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully added %s to: %s\n", c.Args().First(), path)
 
 	return nil
 }

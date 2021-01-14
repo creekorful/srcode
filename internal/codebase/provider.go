@@ -73,8 +73,10 @@ func (provider *provider) Init(path string) (Codebase, error) {
 	}
 
 	return &codebase{
-		repo:      repo,
-		directory: path,
+		directory:    path,
+		repoProvider: provider.repoProvider,
+		repo:         repo,
+		manProvider:  provider.manifestProvider,
 	}, nil
 }
 
@@ -93,8 +95,10 @@ func (provider *provider) Open(path string) (Codebase, error) {
 	}
 
 	return &codebase{
-		repo:      repo,
-		directory: path,
+		directory:    path,
+		repoProvider: provider.repoProvider,
+		repo:         repo,
+		manProvider:  provider.manifestProvider,
 	}, nil
 }
 
@@ -112,20 +116,20 @@ func (provider *provider) Clone(url, path string) (Codebase, error) {
 		return nil, fmt.Errorf("error while cloning codebase: %w", err)
 	}
 
-	// Read the manifest
-	man, err := provider.manifestProvider.Read(filepath.Join(path, metaDir, manifestFile))
-	if err != nil {
-		return nil, fmt.Errorf("error while reading codebase manifest: %w", err)
+	codebase := &codebase{
+		directory:    path,
+		repoProvider: provider.repoProvider,
+		repo:         repo,
+		manProvider:  provider.manifestProvider,
 	}
 
-	codebase := &codebase{
-		repo:      repo,
-		directory: path,
-		manifest:  man,
+	projects, err := codebase.Projects()
+	if err != nil {
+		return nil, err
 	}
 
 	// Clone back project
-	for projectPath, project := range codebase.Projects() {
+	for projectPath, project := range projects {
 		if _, err := provider.repoProvider.Clone(project.Remote, filepath.Join(path, projectPath)); err != nil {
 			return nil, err
 		}
