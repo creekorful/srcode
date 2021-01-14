@@ -6,6 +6,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 func main() {
@@ -41,6 +42,12 @@ func main() {
 				Usage:     "Add a project",
 				Action:    addProject,
 				ArgsUsage: "<remote> [<path>]",
+				Flags: []cli.Flag{
+					&cli.StringSliceFlag{
+						Name:  "git-config",
+						Usage: "Git configuration to apply (format key=value)",
+					},
+				},
 			},
 			{
 				Name:   "sync",
@@ -125,7 +132,7 @@ func addProject(c *cli.Context) error {
 		return err
 	}
 
-	if err := cb.Add(c.Args().First(), path); err != nil {
+	if _, err := cb.Add(c.Args().First(), path, parseGitConfig(c.StringSlice("git-config"))); err != nil {
 		return err
 	}
 
@@ -161,4 +168,17 @@ func syncCodebase(c *cli.Context) error {
 	}
 
 	return nil
+}
+
+func parseGitConfig(args []string) map[string]string {
+	config := map[string]string{}
+
+	for _, arg := range args {
+		parts := strings.Split(arg, "=")
+		if len(parts) == 2 {
+			config[parts[0]] = parts[1]
+		}
+	}
+
+	return config
 }

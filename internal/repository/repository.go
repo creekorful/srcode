@@ -9,6 +9,8 @@ type Repository interface {
 	Push(repo, refspec string) error
 	Pull(repo, refspec string) error
 	AddRemote(name, url string) error
+	Config(key string) (string, error)
+	SetConfig(key, value string) error
 }
 
 type gitWrapperRepository struct {
@@ -39,6 +41,15 @@ func (gwr *gitWrapperRepository) Pull(repo, refspec string) error {
 
 func (gwr *gitWrapperRepository) AddRemote(name, url string) error {
 	_, err := gwr.execWithOutput("remote", "add", name, url)
+	return err
+}
+
+func (gwr *gitWrapperRepository) Config(key string) (string, error) {
+	return gwr.execWithOutput("config", key)
+}
+
+func (gwr *gitWrapperRepository) SetConfig(key, value string) error {
+	_, err := gwr.execWithOutput("config", key, value)
 	return err
 }
 

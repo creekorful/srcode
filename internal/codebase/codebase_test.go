@@ -78,9 +78,11 @@ func TestCodebase_Add(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		currentRepoMock := repository_mock.NewMockRepository(mockCtrl)
+
 		repoProviderMock.EXPECT().
 			Clone(test.repoRemote, filepath.Join(codebase.directory, test.localPath)).
-			Return(nil, nil)
+			Return(currentRepoMock, nil)
 
 		manProviderMock.EXPECT().
 			Read(filepath.Join(codebase.directory, metaDir, manifestFile)).
@@ -90,7 +92,13 @@ func TestCodebase_Add(t *testing.T) {
 			Write(filepath.Join(codebase.directory, metaDir, manifestFile),
 				manifest.Manifest{
 					Projects: map[string]manifest.Project{
-						test.localPath: {Remote: test.repoRemote},
+						test.localPath: {
+							Remote: test.repoRemote,
+							Config: map[string]string{
+								"user.name":  "Aloïs Micard",
+								"user.email": "alois@micard.lu",
+							},
+						},
 					},
 				}).
 			Return(nil)
@@ -99,7 +107,28 @@ func TestCodebase_Add(t *testing.T) {
 			CommitFiles(fmt.Sprintf("Add %s to %s", test.repoRemote, test.localPath), "manifest.json").
 			Return(nil)
 
-		if err := codebase.Add(test.repoRemote, test.argPath); err != nil {
+		currentRepoMock.EXPECT().
+			SetConfig("user.name", "Aloïs Micard").
+			Return(nil)
+		currentRepoMock.EXPECT().
+			SetConfig("user.email", "alois@micard.lu").
+			Return(nil)
+
+		project, err := codebase.Add(test.repoRemote, test.argPath, map[string]string{
+			"user.name":  "Aloïs Micard",
+			"user.email": "alois@micard.lu",
+		})
+		if err != nil {
+			t.Fail()
+		}
+
+		if project.Remote != test.repoRemote {
+			t.Fail()
+		}
+		if project.Config["user.name"] != "Aloïs Micard" {
+			t.Fail()
+		}
+		if project.Config["user.email"] != "alois@micard.lu" {
 			t.Fail()
 		}
 	}
@@ -128,7 +157,7 @@ func TestCodebase_Add_PathTaken(t *testing.T) {
 			},
 		}, nil)
 
-	if err := codebase.Add("git@github.com:test/test.git", "test/test"); !errors.Is(err, ErrPathTaken) {
+	if _, err := codebase.Add("git@github.com:test/test.git", "test/test", nil); !errors.Is(err, ErrPathTaken) {
 		t.Fail()
 	}
 }

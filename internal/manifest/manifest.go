@@ -5,5 +5,6 @@ type Manifest struct {
 }
 
 type Project struct {
-	Remote string `json:"remote"`
+	Remote string            `json:"remote"`
+	Config map[string]string `json:"config"`
 }

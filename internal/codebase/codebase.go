@@ -17,7 +17,7 @@ var ErrPathTaken = errors.New("a project already exist at given path")
 
 type Codebase interface {
 	Projects() (map[string]manifest.Project, error)
-	Add(remote, path string) error
+	Add(remote, path string, config map[string]string) (manifest.Project, error)
 
 	Sync(delete bool) (map[string]manifest.Project, map[string]manifest.Project, error)
 }
@@ -38,7 +38,7 @@ func (codebase *codebase) Projects() (map[string]manifest.Project, error) {
 	return man.Projects, nil
 }
 
-func (codebase *codebase) Add(remote, path string) error {
+func (codebase *codebase) Add(remote, path string, config map[string]string) (manifest.Project, error) {
 	if path == "" {
 		parts := strings.Split(remote, "/")
 		path = strings.TrimSuffix(parts[len(parts)-1], ".git")
@@ -46,7 +46,7 @@ func (codebase *codebase) Add(remote, path string) error {
 
 	man, err := codebase.readManifest()
 	if err != nil {
-		return err
+		return manifest.Project{}, err
 	}
 
 	if man.Projects == nil {
@@ -55,28 +55,37 @@ func (codebase *codebase) Add(remote, path string) error {
 
 	// Make sure path is not taken
 	if _, exist := man.Projects[path]; exist {
-		return fmt.Errorf("unable to add project %s: %w", remote, ErrPathTaken)
+		return manifest.Project{}, fmt.Errorf("unable to add project %s: %w", remote, ErrPathTaken)
 	}
 
-	if _, err := codebase.repoProvider.Clone(remote, filepath.Join(codebase.directory, path)); err != nil {
-		return err
+	repo, err := codebase.repoProvider.Clone(remote, filepath.Join(codebase.directory, path))
+	if err != nil {
+		return manifest.Project{}, err
+	}
+
+	// Apply config
+	for key, value := range config {
+		if err := repo.SetConfig(key, value); err != nil {
+			return manifest.Project{}, err
+		}
 	}
 
 	// Update manifest
 	man.Projects[path] = manifest.Project{
 		Remote: remote,
+		Config: config,
 	}
 
 	if err := codebase.writeManifest(man); err != nil {
-		return err
+		return manifest.Project{}, err
 	}
 
 	// Create commit
 	if err := codebase.repo.CommitFiles(fmt.Sprintf("Add %s to %s", remote, path), manifestFile); err != nil {
-		return err
+		return manifest.Project{}, err
 	}
 
-	return nil
+	return man.Projects[path], nil
 }
 
 func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[string]manifest.Project, error) {
