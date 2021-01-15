@@ -8,8 +8,10 @@ import (
 
 //go:generate mockgen -destination=../repository_mock/provider_mock.go -package=repository_mock . Provider
 
+// DefaultProvider is the default Git provider
 var DefaultProvider = &gitWrapperProvider{}
 
+// Provider is something that allows to Init, Open, or Clone a Repository
 type Provider interface {
 	Init(path string) (Repository, error)
 	Open(path string) (Repository, error)

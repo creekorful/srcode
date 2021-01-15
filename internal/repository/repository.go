@@ -7,6 +7,7 @@ import (
 
 //go:generate mockgen -destination=../repository_mock/repository_mock.go -package=repository_mock . Repository
 
+// Repository represent a git repository
 type Repository interface {
 	CommitFiles(message string, files ...string) error
 	Push(repo, refspec string) error

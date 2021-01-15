@@ -14,12 +14,15 @@ import (
 )
 
 var (
+	// ErrCodebaseAlreadyExist is returned when a codebase already exist in current directory
 	ErrCodebaseAlreadyExist = errors.New("a codebase already exist")
-	ErrCodebaseNotExist     = errors.New("no codebase found in current or parent directories")
+	// ErrCodebaseNotExist is returned when no codebase is found in current or parent directories
+	ErrCodebaseNotExist = errors.New("no codebase found in current or parent directories")
 
+	// DefaultProvider is the default codebase provider
 	DefaultProvider = &provider{
 		repoProvider:     repository.DefaultProvider,
-		manifestProvider: &manifest.JsonProvider{},
+		manifestProvider: &manifest.JSONProvider{},
 	}
 )
 
@@ -28,6 +31,7 @@ const (
 	manifestFile = "manifest.json"
 )
 
+// Provider is something that allows to Init, Open, or Clone a Codebase
 type Provider interface {
 	Init(path, remote string) (Codebase, error)
 	Open(path string) (Codebase, error)

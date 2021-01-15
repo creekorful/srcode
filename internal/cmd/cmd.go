@@ -7,6 +7,7 @@ import (
 	"strings"
 )
 
+// ExecWithOutput execute given command and return the output as a string
 func ExecWithOutput(cmd *exec.Cmd) (string, error) {
 	// capture stderr
 	stdErr := bytes.NewBufferString("")

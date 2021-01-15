@@ -16,11 +16,15 @@ import (
 )
 
 var (
-	ErrPathTaken       = errors.New("a project already exist at given path")
-	ErrNoProjectFound  = errors.New("no project exist at current path")
+	// ErrPathTaken is returned when a project already exist at given path
+	ErrPathTaken = errors.New("a project already exist at given path")
+	// ErrNoProjectFound is returned when no project exist at given path
+	ErrNoProjectFound = errors.New("no project exist at current path")
+	// ErrCommandNotFound is returned when given command is not found
 	ErrCommandNotFound = errors.New("no command with the name found")
 )
 
+// Codebase is a collection of projects
 type Codebase interface {
 	Projects() (map[string]manifest.Project, error)
 	Add(remote, path string, config map[string]string) (manifest.Project, error)

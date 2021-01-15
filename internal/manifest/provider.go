@@ -7,15 +7,17 @@ import (
 
 //go:generate mockgen -destination=../manifest_mock/manifest_mock.go -package=manifest_mock . Provider
 
+// Provider is something that allows to Read or Write a Manifest
 type Provider interface {
 	Read(path string) (Manifest, error)
 	Write(path string, manifest Manifest) error
 }
 
-type JsonProvider struct {
+// JSONProvider is a provider that use a json file as storage for the Manifest
+type JSONProvider struct {
 }
 
-func (jp *JsonProvider) Read(path string) (Manifest, error) {
+func (jp *JSONProvider) Read(path string) (Manifest, error) {
 	var res Manifest
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -28,7 +30,7 @@ func (jp *JsonProvider) Read(path string) (Manifest, error) {
 	return res, nil
 }
 
-func (jp *JsonProvider) Write(path string, manifest Manifest) error {
+func (jp *JSONProvider) Write(path string, manifest Manifest) error {
 	b, err := json.Marshal(manifest)
 	if err != nil {
 		return err

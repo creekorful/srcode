@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestJsonProvider_Read(t *testing.T) {
+func TestJSONProvider_Read(t *testing.T) {
 	m := Manifest{
 		Projects: map[string]Project{
 			"12": {Remote: "remote"},
@@ -25,7 +25,7 @@ func TestJsonProvider_Read(t *testing.T) {
 		t.FailNow()
 	}
 
-	p := JsonProvider{}
+	p := JSONProvider{}
 
 	res, err := p.Read(path)
 	if err != nil {
@@ -37,14 +37,14 @@ func TestJsonProvider_Read(t *testing.T) {
 	}
 }
 
-func TestJsonProvider_Write(t *testing.T) {
+func TestJSONProvider_Write(t *testing.T) {
 	m := Manifest{
 		Projects: map[string]Project{
 			"12": {Remote: "remote"},
 		},
 	}
 
-	p := JsonProvider{}
+	p := JSONProvider{}
 
 	path := filepath.Join(t.TempDir(), "test.json")
 	if err := p.Write(path, m); err != nil {
