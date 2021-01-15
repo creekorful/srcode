@@ -9,11 +9,17 @@ import (
 	"strings"
 )
 
+var (
+	// Version is updated by goreleaser using ldflags
+	// https://goreleaser.com/environment/
+	version = "dev"
+)
+
 func main() {
 	app := cli.App{
 		Name:    "srcode",
 		Usage:   "Source code manager",
-		Version: "0.1.0",
+		Version: version,
 		Description: `
 srcode is a tool that help developers to manage their codebase
 in an effective & productive way.
