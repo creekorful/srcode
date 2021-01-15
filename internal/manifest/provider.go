@@ -31,7 +31,7 @@ func (jp *JSONProvider) Read(path string) (Manifest, error) {
 }
 
 func (jp *JSONProvider) Write(path string, manifest Manifest) error {
-	b, err := json.Marshal(manifest)
+	b, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return err
 	}
