@@ -60,6 +60,11 @@ func main() {
 					},
 				},
 			},
+			{
+				Name:   "pwd",
+				Usage:  "Print codebase working directory",
+				Action: pwdCodebase,
+			},
 		},
 	}
 
@@ -166,6 +171,22 @@ func syncCodebase(c *cli.Context) error {
 	for path, project := range removed {
 		fmt.Printf("[-] %s -> %s\n", project.Remote, path)
 	}
+
+	return nil
+}
+
+func pwdCodebase(c *cli.Context) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	cb, err := codebase.DefaultProvider.Open(cwd)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("/%s\n", cb.LocalPath())
 
 	return nil
 }

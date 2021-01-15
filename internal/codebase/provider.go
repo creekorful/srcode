@@ -4,16 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/creekorful/srcode/internal/fs"
 	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/creekorful/srcode/internal/repository"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 var (
 	ErrCodebaseAlreadyExist = errors.New("a codebase already exist")
-	ErrCodebaseNotExist     = errors.New("no codebase found")
+	ErrCodebaseNotExist     = errors.New("no codebase found in current or parent directories")
 
 	DefaultProvider = &provider{
 		repoProvider:     repository.DefaultProvider,
@@ -80,7 +82,7 @@ func (provider *provider) Init(path, remote string) (Codebase, error) {
 	}
 
 	return &codebase{
-		directory:    path,
+		rootPath:     path,
 		repoProvider: provider.repoProvider,
 		repo:         repo,
 		manProvider:  provider.manifestProvider,
@@ -88,21 +90,45 @@ func (provider *provider) Init(path, remote string) (Codebase, error) {
 }
 
 func (provider *provider) Open(path string) (Codebase, error) {
-	exist, err := codebaseExists(path)
+	rootPath := path
+	localPath := ""
+
+	// Easier case: we are at codebase root
+	exist, err := codebaseExists(rootPath)
 	if err != nil {
 		return nil, err
 	}
+
 	if !exist {
-		return nil, fmt.Errorf("error while opening codebase at %s: %w", path, ErrCodebaseNotExist)
+		// Otherwise lookup parent directories
+		parentDirs := fs.GetParentDirs(rootPath)
+		for _, dir := range parentDirs {
+			found, err := codebaseExists(dir)
+			if err != nil {
+				continue // TODO fails?
+			}
+
+			if found {
+				localPath = strings.TrimPrefix(rootPath, dir+"/")
+				rootPath = dir
+				exist = true
+				break
+			}
+		}
 	}
 
-	repo, err := provider.repoProvider.Open(filepath.Join(path, metaDir))
+	if !exist {
+		return nil, fmt.Errorf("error while opening codebase at %s: %w", rootPath, ErrCodebaseNotExist)
+	}
+
+	repo, err := provider.repoProvider.Open(filepath.Join(rootPath, metaDir))
 	if err != nil {
 		return nil, fmt.Errorf("error while opening codebase at %s: %w", path, err)
 	}
 
 	return &codebase{
-		directory:    path,
+		rootPath:     rootPath,
+		localPath:    localPath,
 		repoProvider: provider.repoProvider,
 		repo:         repo,
 		manProvider:  provider.manifestProvider,
@@ -124,7 +150,7 @@ func (provider *provider) Clone(url, path string) (Codebase, error) {
 	}
 
 	codebase := &codebase{
-		directory:    path,
+		rootPath:     path,
 		repoProvider: provider.repoProvider,
 		repo:         repo,
 		manProvider:  provider.manifestProvider,

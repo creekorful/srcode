@@ -18,15 +18,25 @@ var ErrPathTaken = errors.New("a project already exist at given path")
 type Codebase interface {
 	Projects() (map[string]manifest.Project, error)
 	Add(remote, path string, config map[string]string) (manifest.Project, error)
-
 	Sync(delete bool) (map[string]manifest.Project, map[string]manifest.Project, error)
+	LocalPath() string
 }
 
 type codebase struct {
-	directory    string
+	// Full path to the codebase
+	// Example: `/home/creekorful/Codebase`
+	rootPath string
+	// Local path inside the codebase
+	// Example: `` or `Contributing/Debian`
+	localPath string
+
+	// The codebase Git repository
+	repo repository.Repository
+
+	// The repository provider (i.e the way we are opening, cloning Git repositories)
 	repoProvider repository.Provider
-	repo         repository.Repository
-	manProvider  manifest.Provider
+	// The manifest provider (i.e the way we are reading/writing the manifest)
+	manProvider manifest.Provider
 }
 
 func (codebase *codebase) Projects() (map[string]manifest.Project, error) {
@@ -44,6 +54,10 @@ func (codebase *codebase) Add(remote, path string, config map[string]string) (ma
 		path = strings.TrimSuffix(parts[len(parts)-1], ".git")
 	}
 
+	if codebase.localPath != "" {
+		path = filepath.Join(codebase.localPath, path)
+	}
+
 	man, err := codebase.readManifest()
 	if err != nil {
 		return manifest.Project{}, err
@@ -58,7 +72,7 @@ func (codebase *codebase) Add(remote, path string, config map[string]string) (ma
 		return manifest.Project{}, fmt.Errorf("unable to add project %s: %w", remote, ErrPathTaken)
 	}
 
-	repo, err := codebase.repoProvider.Clone(remote, filepath.Join(codebase.directory, path))
+	repo, err := codebase.repoProvider.Clone(remote, filepath.Join(codebase.rootPath, path))
 	if err != nil {
 		return manifest.Project{}, err
 	}
@@ -115,7 +129,7 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 		addedProjects := map[string]manifest.Project{}
 		for p, project := range man.Projects {
 			found := false
-			for previousPath, _ := range previousMan.Projects {
+			for previousPath := range previousMan.Projects {
 				if p == previousPath {
 					found = true
 					break
@@ -127,11 +141,11 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 				addedProjects[p] = project
 
 				// Clone the project (and don't break in case of error)
-				_, _ = codebase.repoProvider.Clone(project.Remote, filepath.Join(codebase.directory, p))
+				_, _ = codebase.repoProvider.Clone(project.Remote, filepath.Join(codebase.rootPath, p))
 			}
 
 			if len(project.Config) > 0 {
-				repo, err := codebase.repoProvider.Open(filepath.Join(codebase.directory, p))
+				repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, p))
 				if err != nil {
 					return nil, nil, err
 				}
@@ -149,7 +163,7 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 		removedProjects := map[string]manifest.Project{}
 		for previousPath, previousProject := range previousMan.Projects {
 			found := false
-			for p, _ := range man.Projects {
+			for p := range man.Projects {
 				if p == previousPath {
 					found = true
 					break
@@ -162,7 +176,7 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 
 				// Remove from disk (and don't break in case of error)
 				if delete {
-					_ = os.RemoveAll(filepath.Join(codebase.directory, previousPath))
+					_ = os.RemoveAll(filepath.Join(codebase.rootPath, previousPath))
 				}
 			}
 		}
@@ -173,8 +187,12 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 	return nil, nil, nil
 }
 
+func (codebase *codebase) LocalPath() string {
+	return codebase.localPath
+}
+
 func (codebase *codebase) readManifest() (manifest.Manifest, error) {
-	man, err := codebase.manProvider.Read(filepath.Join(filepath.Join(codebase.directory, metaDir, manifestFile)))
+	man, err := codebase.manProvider.Read(filepath.Join(filepath.Join(codebase.rootPath, metaDir, manifestFile)))
 	if err != nil {
 		return manifest.Manifest{}, err
 	}
@@ -183,5 +201,5 @@ func (codebase *codebase) readManifest() (manifest.Manifest, error) {
 }
 
 func (codebase *codebase) writeManifest(man manifest.Manifest) error {
-	return codebase.manProvider.Write(filepath.Join(filepath.Join(codebase.directory, metaDir, manifestFile)), man)
+	return codebase.manProvider.Write(filepath.Join(filepath.Join(codebase.rootPath, metaDir, manifestFile)), man)
 }

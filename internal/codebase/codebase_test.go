@@ -30,7 +30,7 @@ func TestCodebase_Projects(t *testing.T) {
 
 	codebase := &codebase{
 		manProvider: manProviderMock,
-		directory:   "test-dir",
+		rootPath:    "test-dir",
 	}
 
 	projects, err := codebase.Projects()
@@ -51,45 +51,61 @@ func TestCodebase_Add(t *testing.T) {
 	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
 	repoMock := repository_mock.NewMockRepository(mockCtrl)
 
-	codebase := &codebase{
-		repoProvider: repoProviderMock,
-		repo:         repoMock,
-		manProvider:  manProviderMock,
-		directory:    "/home/creekorful",
-	}
-
 	type test struct {
-		repoRemote string
-
-		localPath string
-		argPath   string
+		repoRemote string // the repo remote
+		localPath  string // the local path that should be computed for the project
+		argPath    string // the wanted / provided path for the project
+		from       string // from where we are opening the codebase (i.e codebase local path)
 	}
+
 	tests := []test{
 		{
 			repoRemote: "git@github.com:creekorful/test.git",
 			localPath:  "test",
 			argPath:    "",
+			from:       "",
 		},
 		{
 			repoRemote: "git@github.com:creekorful/test.git",
 			localPath:  "Test-folder/Another/test",
 			argPath:    "Test-folder/Another/test",
+			from:       "",
+		},
+		{
+			repoRemote: "git@github.com:creekorful/test.git",
+			localPath:  "test/b/c/d/test",
+			argPath:    "",
+			from:       "test/b/c/d",
+		},
+		{
+			repoRemote: "git@github.com:creekorful/test.git",
+			localPath:  "test/d/a/b/Test-folder/Another/test",
+			argPath:    "Test-folder/Another/test",
+			from:       "test/d/a/b",
 		},
 	}
 
 	for _, test := range tests {
+		codebase := &codebase{
+			repoProvider: repoProviderMock,
+			repo:         repoMock,
+			manProvider:  manProviderMock,
+			rootPath:     "/home/creekorful",
+			localPath:    test.from,
+		}
+
 		currentRepoMock := repository_mock.NewMockRepository(mockCtrl)
 
 		repoProviderMock.EXPECT().
-			Clone(test.repoRemote, filepath.Join(codebase.directory, test.localPath)).
+			Clone(test.repoRemote, filepath.Join(codebase.rootPath, test.localPath)).
 			Return(currentRepoMock, nil)
 
 		manProviderMock.EXPECT().
-			Read(filepath.Join(codebase.directory, metaDir, manifestFile)).
+			Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
 			Return(manifest.Manifest{}, nil)
 
 		manProviderMock.EXPECT().
-			Write(filepath.Join(codebase.directory, metaDir, manifestFile),
+			Write(filepath.Join(codebase.rootPath, metaDir, manifestFile),
 				manifest.Manifest{
 					Projects: map[string]manifest.Project{
 						test.localPath: {
@@ -146,18 +162,26 @@ func TestCodebase_Add_PathTaken(t *testing.T) {
 		repoProvider: repoProviderMock,
 		repo:         repoMock,
 		manProvider:  manProviderMock,
-		directory:    "/home/creekorful",
+		rootPath:     "/home/creekorful",
+		localPath:    "",
 	}
 
 	manProviderMock.EXPECT().
-		Read(filepath.Join(codebase.directory, metaDir, manifestFile)).
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Times(2).
 		Return(manifest.Manifest{
 			Projects: map[string]manifest.Project{
-				"test/test": {Remote: ""},
+				"test/test":       {Remote: ""},
+				"inside-dir/test": {Remote: ""},
 			},
 		}, nil)
 
 	if _, err := codebase.Add("git@github.com:test/test.git", "test/test", nil); !errors.Is(err, ErrPathTaken) {
+		t.Fail()
+	}
+
+	codebase.localPath = "inside-dir"
+	if _, err := codebase.Add("git@github.com:test/test.git", "", nil); !errors.Is(err, ErrPathTaken) {
 		t.Fail()
 	}
 }
@@ -176,7 +200,7 @@ func TestCodebase_Sync(t *testing.T) {
 		repoProvider: repoProviderMock,
 		repo:         repoMock,
 		manProvider:  manProviderMock,
-		directory:    dir,
+		rootPath:     dir,
 	}
 
 	// create mock directory

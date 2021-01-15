@@ -49,7 +49,13 @@ func TestProvider_Init(t *testing.T) {
 		t.Error(err)
 	}
 
-	if val.(*codebase).directory != targetDir {
+	if val.(*codebase).rootPath != targetDir {
+		t.Fail()
+	}
+	if val.(*codebase).localPath != "" {
+		t.Fail()
+	}
+	if val.LocalPath() != "" {
 		t.Fail()
 	}
 }
@@ -101,7 +107,49 @@ func TestProvider_Open(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if val.(*codebase).directory != targetDir {
+	if val.(*codebase).rootPath != targetDir {
+		t.Fail()
+	}
+	if val.(*codebase).localPath != "" {
+		t.Fail()
+	}
+	if val.LocalPath() != "" {
+		t.Fail()
+	}
+}
+
+func TestProvider_Open_InSubDirectory(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+
+	provider := provider{repoProvider: repoProviderMock}
+
+	targetDir := filepath.Join(t.TempDir(), "test-directory")
+
+	// Simulate an existing codebase
+	if err := os.MkdirAll(filepath.Join(targetDir, metaDir), 0770); err != nil {
+		t.FailNow()
+	}
+	if err := os.MkdirAll(filepath.Join(targetDir, "test", "a", "b"), 0770); err != nil {
+		t.FailNow()
+	}
+
+	// Repository provider fails
+	repoProviderMock.EXPECT().Open(filepath.Join(targetDir, metaDir)).Return(nil, nil)
+	val, err := provider.Open(filepath.Join(targetDir, "test", "a", "b")) // Open from inside the codebase
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if val.(*codebase).rootPath != targetDir {
+		t.Fail()
+	}
+	if val.(*codebase).localPath != filepath.Join("test", "a", "b") {
+		t.Fail()
+	}
+	if val.LocalPath() != filepath.Join("test", "a", "b") {
 		t.Fail()
 	}
 }
@@ -174,7 +222,13 @@ func TestProvider_Clone(t *testing.T) {
 		t.Fail()
 	}
 
-	if val.(*codebase).directory != targetDir {
+	if val.(*codebase).rootPath != targetDir {
+		t.Fail()
+	}
+	if val.(*codebase).localPath != "" {
+		t.Fail()
+	}
+	if val.LocalPath() != "" {
 		t.Fail()
 	}
 }
