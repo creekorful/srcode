@@ -12,17 +12,19 @@ import (
 func main() {
 	app := cli.App{
 		Name:    "srcode",
-		Usage:   "Manage your codebase like a boss!",
+		Usage:   "Source code manager",
 		Version: "0.1.0",
-		Authors: []*cli.Author{{
-			Name:  "Aloïs Micard",
-			Email: "alois@micard.lu",
-		}},
-		Action: runCodebase, // shortcut: use srcode <command> to execute a codebase command easily
+		Description: `
+srcode is a tool that help developers to manage their codebase
+in an effective & productive way.
+
+The codebase relies on a special git repository to track the changes
+(new / deleted) projects and synchronize the up-to-date configuration
+remotely.`,
 		Commands: []*cli.Command{
 			{
 				Name:      "init",
-				Usage:     "Initialize a new codebase",
+				Usage:     "Create an empty codebase",
 				Action:    initCodebase,
 				ArgsUsage: "<path>",
 				Flags: []cli.Flag{
@@ -31,16 +33,20 @@ func main() {
 						Usage: "The codebase remote",
 					},
 				},
+				Description: `
+This command creates an empty codebase - basically a .srcode directory with manifest file to track the codebase projects.`,
 			},
 			{
 				Name:      "clone",
-				Usage:     "Clone an existing codebase",
+				Usage:     "Clone a codebase into a new directory",
 				Action:    cloneCodebase,
 				ArgsUsage: "<remote> [<path>]",
+				Description: `
+Clones a codebase into a newly created directory, and install (clone) the existing projects.`,
 			},
 			{
 				Name:      "add",
-				Usage:     "Add a project",
+				Usage:     "Add a project to the codebase",
 				Action:    addProject,
 				ArgsUsage: "<remote> [<path>]",
 				Flags: []cli.Flag{
@@ -49,10 +55,12 @@ func main() {
 						Usage: "Git configuration to apply (format key=value)",
 					},
 				},
+				Description: `
+Add a project (git repository) to the current codebase.`,
 			},
 			{
 				Name:   "sync",
-				Usage:  "Synchronize the codebase",
+				Usage:  "Synchronize the codebase with the linked remote",
 				Action: syncCodebase,
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
@@ -60,19 +68,31 @@ func main() {
 						Usage: "Deleted removed projects",
 					},
 				},
+				Description: `
+Synchronize the codebase with the linked remote - i.e install & configure new project and remove removed ones,
+while pushing the changes.`,
 			},
 			{
 				Name:   "pwd",
 				Usage:  "Print codebase working directory",
 				Action: pwdCodebase,
+				Description: `
+Print the codebase working directory - i.e the working directory relative to the codebase root.`,
 			},
 			{
 				Name:      "run",
 				Usage:     "Run a codebase command",
 				Action:    runCodebase,
 				ArgsUsage: "<command>",
+				Description: `
+Run a command inside a codebase project.`,
 			},
 		},
+		Authors: []*cli.Author{{
+			Name:  "Aloïs Micard",
+			Email: "alois@micard.lu",
+		}},
+		Action: runCodebase, // shortcut: use srcode <command> to execute a codebase command easily
 	}
 
 	if err := app.Run(os.Args); err != nil {
