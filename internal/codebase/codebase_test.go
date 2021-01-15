@@ -269,3 +269,62 @@ func TestCodebase_Sync(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestCodebase_Run(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+
+	codebase := &codebase{
+		manProvider: manProviderMock,
+		rootPath:    "test-dir",
+		localPath:   "",
+	}
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join("test-dir", metaDir, manifestFile)).
+		Times(5).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something": {
+					Commands: map[string]string{
+						"greet-local":    "echo Hello from local command",
+						"greet-global":   "@greet",
+						"invalid-global": "@invalid",
+					},
+				},
+			},
+			Commands: map[string]string{
+				"greet": "echo Hello from global command",
+			},
+		}, nil)
+
+	// Try to run command from a non-project directory
+	if _, err := codebase.Run("greet-local"); !errors.Is(err, ErrNoProjectFound) {
+		t.Fail()
+	}
+
+	// CD inside a project
+	codebase.localPath = "test/something"
+
+	// Try to run an non existing local command
+	if _, err := codebase.Run("blah"); !errors.Is(err, ErrCommandNotFound) {
+		t.Fail()
+	}
+
+	// Try to run an non existing global command
+	if _, err := codebase.Run("invalid-global"); !errors.Is(err, ErrCommandNotFound) {
+		t.Fail()
+	}
+
+	// Try to run a local command
+	if res, err := codebase.Run("greet-local"); err != nil || res != "Hello from local command" {
+		t.Fail()
+	}
+
+	// Try to run a global command
+	if res, err := codebase.Run("greet-global"); err != nil || res != "Hello from global command" {
+		t.Fail()
+	}
+}

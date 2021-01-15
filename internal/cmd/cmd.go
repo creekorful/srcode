@@ -1,4 +1,4 @@
-package repository
+package cmd
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-func execWithOutput(cmd *exec.Cmd) (string, error) {
+func ExecWithOutput(cmd *exec.Cmd) (string, error) {
 	// capture stderr
 	stdErr := bytes.NewBufferString("")
 	cmd.Stderr = stdErr

@@ -18,6 +18,7 @@ func main() {
 			Name:  "Aloïs Micard",
 			Email: "alois@micard.lu",
 		}},
+		Action: runCodebase, // shortcut: use srcode <command> to execute a codebase command easily
 		Commands: []*cli.Command{
 			{
 				Name:      "init",
@@ -64,6 +65,12 @@ func main() {
 				Name:   "pwd",
 				Usage:  "Print codebase working directory",
 				Action: pwdCodebase,
+			},
+			{
+				Name:      "run",
+				Usage:     "Run a codebase command",
+				Action:    runCodebase,
+				ArgsUsage: "<command>",
 			},
 		},
 	}
@@ -187,6 +194,31 @@ func pwdCodebase(c *cli.Context) error {
 	}
 
 	fmt.Printf("/%s\n", cb.LocalPath())
+
+	return nil
+}
+
+func runCodebase(c *cli.Context) error {
+	if !c.Args().Present() {
+		return fmt.Errorf("correct usage: srcode run <command>")
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	cb, err := codebase.DefaultProvider.Open(cwd)
+	if err != nil {
+		return err
+	}
+
+	res, err := cb.Run(c.Args().First())
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", res)
 
 	return nil
 }

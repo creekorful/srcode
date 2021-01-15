@@ -1,6 +1,9 @@
 package repository
 
-import "os/exec"
+import (
+	"github.com/creekorful/srcode/internal/cmd"
+	"os/exec"
+)
 
 //go:generate mockgen -destination=../repository_mock/repository_mock.go -package=repository_mock . Repository
 
@@ -54,8 +57,8 @@ func (gwr *gitWrapperRepository) SetConfig(key, value string) error {
 }
 
 func (gwr *gitWrapperRepository) execWithOutput(args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = gwr.path
+	command := exec.Command("git", args...)
+	command.Dir = gwr.path
 
-	return execWithOutput(cmd)
+	return cmd.ExecWithOutput(command)
 }
