@@ -34,7 +34,7 @@ func TestProvider_Init(t *testing.T) {
 	}
 
 	// should create the initial commit
-	repoMock.EXPECT().CommitFiles("Initial commit", "manifest.json").Return(nil)
+	repoMock.EXPECT().CommitFiles("Initial commit", "manifest.json", "README.md").Return(nil)
 	// should add remote
 	repoMock.EXPECT().AddRemote("origin", "git@github.com:creekorful/test.git").Return(nil)
 
@@ -46,6 +46,11 @@ func TestProvider_Init(t *testing.T) {
 
 	// should create manifest file
 	if _, err := os.Stat(filepath.Join(targetDir, metaDir, manifestFile)); err != nil {
+		t.Error(err)
+	}
+
+	// should create README.md
+	if _, err := os.Stat(filepath.Join(targetDir, metaDir, "README.md")); err != nil {
 		t.Error(err)
 	}
 

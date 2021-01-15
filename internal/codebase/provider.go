@@ -73,8 +73,14 @@ func (provider *provider) Init(path, remote string) (Codebase, error) {
 		return nil, fmt.Errorf("error while creating manifest: %w", err)
 	}
 
+	// create the README.md
+	readmeMd := getReadmeMD(remote)
+	if err := ioutil.WriteFile(filepath.Join(path, metaDir, "README.md"), []byte(readmeMd), 0640); err != nil {
+		return nil, fmt.Errorf("error while writing README.md: %w", err)
+	}
+
 	// Create initial commit
-	if err := repo.CommitFiles("Initial commit", manifestFile); err != nil {
+	if err := repo.CommitFiles("Initial commit", manifestFile, "README.md"); err != nil {
 		return nil, err
 	}
 
@@ -193,4 +199,22 @@ func codebaseExists(path string) (bool, error) {
 	}
 
 	return false, err
+}
+
+func getReadmeMD(remote string) string {
+	b := strings.Builder{}
+
+	b.WriteString("# dot-srcode\n\n")
+	b.WriteString("This repository contains a custom .srcode configuration.\n")
+	b.WriteString("See [this repository](https://github.com/creekorful/srcode) for more details.\n\n")
+
+	if remote != "" {
+		b.WriteString("## How to use it\n\n")
+		b.WriteString("One can restore this codebase by issuing the following command:\n\n")
+		b.WriteString("```\n")
+		b.WriteString(fmt.Sprintf("$ srcode clone %s code\n", remote))
+		b.WriteString("```\n")
+	}
+
+	return b.String()
 }

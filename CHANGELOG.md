@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Added
+
+- Now create README.md in meta directory to explain how to use it.
+
 ## [0.1.0] - 2021-01-15
 
 Initial pre-release.
