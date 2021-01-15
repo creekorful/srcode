@@ -1,0 +1,51 @@
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: srcode
+    main: ./cmd/srcode/srcode.go
+    binary: srcode
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=0
+
+brews:
+  - tap:
+      owner: creekorful
+      name: srcode-tap
+
+    download_strategy: CurlDownloadStrategy
+
+    commit_author:
+      name: Aloïs Micard
+      email: alois@micard.lu
+
+    folder: Formula
+
+    description: "Tool that help developers to manage their codebase in an effective & productive way."
+    license: "GPL-3.0"
+
+    skip_upload: auto
+
+    dependencies:
+      - name: git
+
+    test: |
+      system "#{bin}/srcode --version"
+
+    install: |
+      bin.install "srcode"
+
+checksum:
+  name_template: 'checksums.txt'
+
+snapshot:
+  name_template: "{{ .Tag }}-{{ .ShortCommit }}"
+
+release:
+  prerelease: true
