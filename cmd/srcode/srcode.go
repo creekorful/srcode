@@ -91,11 +91,13 @@ func initCodebase(c *cli.Context) error {
 		return err
 	}
 
-	if _, err := codebase.DefaultProvider.Init(filepath.Join(cwd, c.Args().First()), c.String("remote")); err != nil {
+	fullPath := filepath.Join(cwd, c.Args().First())
+
+	if _, err := codebase.DefaultProvider.Init(fullPath, c.String("remote")); err != nil {
 		return err
 	}
 
-	fmt.Printf("Successfully initialized new codebase at: %s\n", c.Args().First())
+	fmt.Printf("Successfully initialized new codebase at: %s\n", fullPath)
 
 	return nil
 }
