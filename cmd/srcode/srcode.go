@@ -93,6 +93,13 @@ Print the codebase working directory - i.e the working directory relative to the
 				Description: `
 Run a command inside a codebase project.`,
 			},
+			{
+				Name:   "ls",
+				Usage:  "Display the codebase projects",
+				Action: lsCodebase,
+				Description: `
+Display the codebase projects with their details.`,
+			},
 		},
 		Authors: []*cli.Author{{
 			Name:  "Aloïs Micard",
@@ -247,6 +254,29 @@ func runCodebase(c *cli.Context) error {
 	}
 
 	fmt.Printf("%s\n", res)
+
+	return nil
+}
+
+func lsCodebase(c *cli.Context) error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	cb, err := codebase.DefaultProvider.Open(cwd)
+	if err != nil {
+		return err
+	}
+
+	projects, err := cb.Projects()
+	if err != nil {
+		return err
+	}
+
+	for path, project := range projects {
+		fmt.Printf("/%s -> %s\n", path, project.Remote)
+	}
 
 	return nil
 }
