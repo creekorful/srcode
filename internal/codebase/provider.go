@@ -31,11 +31,17 @@ const (
 	manifestFile = "manifest.json"
 )
 
+// ProjectEntry map a codebase project entry (i.e the project alongside his codebase local path)
+type ProjectEntry struct {
+	Path    string
+	Project manifest.Project
+}
+
 // Provider is something that allows to Init, Open, or Clone a Codebase
 type Provider interface {
 	Init(path, remote string) (Codebase, error)
 	Open(path string) (Codebase, error)
-	Clone(url, path string) (Codebase, error)
+	Clone(url, path string, ch chan<- ProjectEntry) (Codebase, error)
 }
 
 type provider struct {
@@ -145,7 +151,7 @@ func (provider *provider) Open(path string) (Codebase, error) {
 	}, nil
 }
 
-func (provider *provider) Clone(url, path string) (Codebase, error) {
+func (provider *provider) Clone(url, path string, ch chan<- ProjectEntry) (Codebase, error) {
 	exist, err := codebaseExists(path)
 	if err != nil {
 		return nil, err
@@ -183,6 +189,17 @@ func (provider *provider) Clone(url, path string) (Codebase, error) {
 				return nil, err
 			}
 		}
+
+		if ch != nil {
+			ch <- ProjectEntry{
+				Path:    projectPath,
+				Project: project,
+			}
+		}
+	}
+
+	if ch != nil {
+		close(ch)
 	}
 
 	return codebase, nil

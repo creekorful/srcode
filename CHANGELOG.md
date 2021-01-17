@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Now create README.md in meta directory to explain how to use it.
 - [#2](https://github.com/creekorful/srcode/issues/2) Implement srcode ls.
 
+## Changed
+
+- cmd/clone: Display cloning progress.
+
 ## Fixed
 
 - [#1](https://github.com/creekorful/srcode/issues/1) Fix codebase init & clone when using absolute path.

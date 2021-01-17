@@ -153,7 +153,16 @@ func cloneCodebase(c *cli.Context) error {
 		path = filepath.Join(cwd, path)
 	}
 
-	if _, err := codebase.DefaultProvider.Clone(c.Args().First(), path); err != nil {
+	ch := make(chan codebase.ProjectEntry)
+
+	// Use goroutine to have un-buffered channel
+	go func() {
+		for entry := range ch {
+			fmt.Printf("Cloned %s -> /%s\n", entry.Project.Remote, entry.Path)
+		}
+	}()
+
+	if _, err := codebase.DefaultProvider.Clone(c.Args().First(), path, ch); err != nil {
 		return nil
 	}
 

@@ -2,12 +2,14 @@ package codebase
 
 import (
 	"errors"
+	"fmt"
 	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/creekorful/srcode/internal/manifest_mock"
 	"github.com/creekorful/srcode/internal/repository_mock"
 	"github.com/golang/mock/gomock"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -169,7 +171,7 @@ func TestProvider_Clone_CodebaseExist(t *testing.T) {
 		t.FailNow()
 	}
 
-	if _, err := provider.Clone("something", targetDir); !errors.Is(err, ErrCodebaseAlreadyExist) {
+	if _, err := provider.Clone("something", targetDir, nil); !errors.Is(err, ErrCodebaseAlreadyExist) {
 		t.Fail()
 	}
 }
@@ -185,11 +187,19 @@ func TestProvider_Clone(t *testing.T) {
 
 	targetDir := filepath.Join(t.TempDir(), "test-directory")
 
+	buffer := ""
+	ch := make(chan ProjectEntry)
+	go func() {
+		for entry := range ch {
+			buffer = fmt.Sprintf("%s\n%s %s", buffer, entry.Path, entry.Project.Remote)
+		}
+	}()
+
 	// Cloning has fail
 	repoProviderMock.EXPECT().
 		Clone("test-remote", filepath.Join(targetDir, metaDir)).
 		Return(nil, errors.New("test error"))
-	if _, err := provider.Clone("test-remote", targetDir); err == nil {
+	if _, err := provider.Clone("test-remote", targetDir, nil); err == nil {
 		t.Fail()
 	}
 
@@ -222,7 +232,7 @@ func TestProvider_Clone(t *testing.T) {
 		Clone("git@example.org:example/test.git", filepath.Join(targetDir, "test-another")).Return(repoMock, nil)
 	repoMock.EXPECT().SetConfig("user.email", "alois@micard.lu").Return(nil)
 
-	val, err := provider.Clone("test-remote", targetDir)
+	val, err := provider.Clone("test-remote", targetDir, ch)
 	if err != nil {
 		t.Fail()
 	}
@@ -234,6 +244,14 @@ func TestProvider_Clone(t *testing.T) {
 		t.Fail()
 	}
 	if val.LocalPath() != "" {
+		t.Fail()
+	}
+
+	// validate cloning progress system
+	if !strings.Contains(buffer, "test/12 https://example.org/test.git") {
+		t.Fail()
+	}
+	if !strings.Contains(buffer, "test-another git@example.org:example/test.git") {
 		t.Fail()
 	}
 }
