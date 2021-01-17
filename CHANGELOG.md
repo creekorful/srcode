@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Added
+
+- [#6](https://github.com/creekorful/srcode/issues/6) Implement srcode set-cmd.
+
 ## [0.2.0] - 2021-01-17
 
 ## Added

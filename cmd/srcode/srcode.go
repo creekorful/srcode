@@ -110,7 +110,15 @@ Print the codebase working directory - i.e the working directory relative to the
 				Action:    runCodebase,
 				ArgsUsage: "<command>",
 				Description: `
-Run a command inside a codebase project.`,
+Run a command inside a codebase project.
+
+Examples
+
+> srcode run lint
+
+Or
+
+> srcode lint`,
 			},
 			{
 				Name:   "ls",
@@ -129,9 +137,37 @@ Execute a git command in bulk (over all codebase projects).
 
 Examples
 
-Update all repositories to their latests changes:
+Update all repositories to their latest changes:
 
 > srcode bulk-git pull --rebase`,
+			},
+			{
+				Name:      "set-cmd",
+				Usage:     "Add a codebase command",
+				Action:    setCmdCodebase,
+				ArgsUsage: "<name> <command>",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "global",
+						Usage: "If true make the command global",
+					},
+				},
+				Description: `
+Add a command to the codebase, either at global level (--global) or
+at project level.
+
+Examples
+
+Create a global go-test command:
+
+> srcode set-cmd --global go-test go test -v ./...
+
+Link a project local test command to the previously defined global alias:
+
+> srcode set-cmd test @go-test
+
+Now you can use 'srcode run test' or 'srcode test' to execute the command
+from project directory.`,
 			},
 		},
 		Authors: []*cli.Author{{
@@ -148,7 +184,7 @@ Update all repositories to their latests changes:
 }
 
 func initCodebase(c *cli.Context) error {
-	if c.Args().Len() != 1 {
+	if c.NArg() != 1 {
 		return fmt.Errorf("correct usage: srcode init <path>")
 	}
 
@@ -172,7 +208,7 @@ func initCodebase(c *cli.Context) error {
 }
 
 func cloneCodebase(c *cli.Context) error {
-	if c.Args().Len() < 1 {
+	if c.NArg() < 1 {
 		return fmt.Errorf("correct usage: srcode clone <remote> [<path>]")
 	}
 
@@ -212,7 +248,7 @@ func cloneCodebase(c *cli.Context) error {
 }
 
 func addProject(c *cli.Context) error {
-	if c.Args().Len() < 1 {
+	if c.NArg() < 1 {
 		return fmt.Errorf("correct usage: srcode add <remote> [<path>]")
 	}
 
@@ -353,6 +389,19 @@ func bulkGitCodebase(c *cli.Context) error {
 	}
 
 	return nil
+}
+
+func setCmdCodebase(c *cli.Context) error {
+	if c.NArg() < 2 {
+		return fmt.Errorf("correct usage: srcode set-cmd <name> <command>")
+	}
+
+	cb, err := openCodebase()
+	if err != nil {
+		return err
+	}
+
+	return cb.SetCommand(c.Args().First(), strings.Join(c.Args().Tail(), " "), c.Bool("global"))
 }
 
 func parseGitConfig(args []string) map[string]string {

@@ -527,3 +527,113 @@ func TestCodebase_BulkGIT_WithOut(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestCodebase_SetCommand(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+	repoMock := repository_mock.NewMockRepository(mockCtrl)
+
+	codebase := &codebase{
+		manProvider: manProviderMock,
+		repo:        repoMock,
+		rootPath:    "test-dir",
+	}
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join("test-dir", metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something": {},
+			},
+		}, nil)
+
+	// from should should only works with global = true
+	if err := codebase.SetCommand("test", "test", false); !errors.Is(err, ErrNoProjectFound) {
+		t.Fail()
+	}
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join("test-dir", metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something": {},
+			},
+		}, nil)
+
+	manProviderMock.EXPECT().
+		Write(filepath.Join(codebase.rootPath, metaDir, manifestFile),
+			manifest.Manifest{
+				Projects: map[string]manifest.Project{
+					"test/something": {},
+				},
+				Commands: map[string]string{
+					"test": "test",
+				},
+			}).
+		Return(nil)
+
+	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
+
+	// should works
+	if err := codebase.SetCommand("test", "test", true); err != nil {
+		t.Fail()
+	}
+
+	// we are inside project
+	codebase.localPath = "test/something"
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join("test-dir", metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something": {},
+			},
+		}, nil)
+
+	manProviderMock.EXPECT().
+		Write(filepath.Join(codebase.rootPath, metaDir, manifestFile),
+			manifest.Manifest{
+				Projects: map[string]manifest.Project{
+					"test/something": {
+						Commands: map[string]string{
+							"test": "test",
+						},
+					},
+				},
+			}).
+		Return(nil)
+
+	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
+
+	if err := codebase.SetCommand("test", "test", false); err != nil {
+		t.Fail()
+	}
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join("test-dir", metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something": {},
+			},
+		}, nil)
+
+	manProviderMock.EXPECT().
+		Write(filepath.Join(codebase.rootPath, metaDir, manifestFile),
+			manifest.Manifest{
+				Projects: map[string]manifest.Project{
+					"test/something": {},
+				},
+				Commands: map[string]string{
+					"test": "test",
+				},
+			}).
+		Return(nil)
+
+	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
+
+	if err := codebase.SetCommand("test", "test", true); err != nil {
+		t.Fail()
+	}
+}

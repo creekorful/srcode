@@ -32,6 +32,7 @@ type Codebase interface {
 	LocalPath() string
 	Run(command string) (string, error)
 	BulkGIT(args []string, out chan<- string) error
+	SetCommand(name, command string, global bool) error
 }
 
 type codebase struct {
@@ -277,6 +278,61 @@ func (codebase *codebase) BulkGIT(args []string, out chan<- string) error {
 		if out != nil {
 			out <- res
 		}
+	}
+
+	return nil
+}
+
+func (codebase *codebase) SetCommand(name, command string, global bool) error {
+	man, err := codebase.readManifest()
+	if err != nil {
+		return err
+	}
+
+	// This is a global command
+	if global {
+		if man.Commands == nil {
+			man.Commands = map[string]string{}
+		}
+
+		man.Commands[name] = command
+
+		if err := codebase.writeManifest(man); err != nil {
+			return err
+		}
+
+		if err := codebase.repo.CommitFiles(
+			fmt.Sprintf("Add command `%s`: `%s`", name, command),
+			manifestFile,
+		); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	project, exist := man.Projects[codebase.localPath]
+
+	if !exist {
+		return ErrNoProjectFound
+	}
+
+	if project.Commands == nil {
+		project.Commands = map[string]string{}
+	}
+
+	project.Commands[name] = command
+	man.Projects[codebase.localPath] = project
+
+	if err := codebase.writeManifest(man); err != nil {
+		return err
+	}
+
+	if err := codebase.repo.CommitFiles(
+		fmt.Sprintf("Add command `%s`: `%s`", name, command),
+		manifestFile,
+	); err != nil {
+		return err
 	}
 
 	return nil
