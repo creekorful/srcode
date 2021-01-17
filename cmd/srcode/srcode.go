@@ -252,6 +252,10 @@ func lsCodebase(c *cli.Context) error {
 		return err
 	}
 
+	if len(projects) == 0 {
+		fmt.Println("No projects found")
+	}
+
 	for path, project := range projects {
 		fmt.Printf("/%s -> %s\n", path, project.Remote)
 	}
