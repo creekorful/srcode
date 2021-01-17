@@ -119,18 +119,21 @@ func initCodebase(c *cli.Context) error {
 		return fmt.Errorf("correct usage: srcode init <path>")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
+	path := c.Args().Get(0)
+	if !filepath.IsAbs(path) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+
+		path = filepath.Join(cwd, path)
+	}
+
+	if _, err := codebase.DefaultProvider.Init(path, c.String("remote")); err != nil {
 		return err
 	}
 
-	fullPath := filepath.Join(cwd, c.Args().First())
-
-	if _, err := codebase.DefaultProvider.Init(fullPath, c.String("remote")); err != nil {
-		return err
-	}
-
-	fmt.Printf("Successfully initialized new codebase at: %s\n", fullPath)
+	fmt.Printf("Successfully initialized new codebase at: %s\n", path)
 
 	return nil
 }
@@ -140,14 +143,14 @@ func cloneCodebase(c *cli.Context) error {
 		return fmt.Errorf("correct usage: srcode clone <remote> [<path>]")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
+	path := c.Args().Get(1)
+	if !filepath.IsAbs(path) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
 
-	path := cwd
-	if arg := c.Args().Get(1); arg != "" {
-		path = filepath.Join(path, arg)
+		path = filepath.Join(cwd, path)
 	}
 
 	if _, err := codebase.DefaultProvider.Clone(c.Args().First(), path); err != nil {
@@ -164,7 +167,7 @@ func addProject(c *cli.Context) error {
 		return fmt.Errorf("correct usage: srcode add <remote> [<path>]")
 	}
 
-	cwd, err := os.Getwd()
+	cb, err := openCodebase()
 	if err != nil {
 		return err
 	}
@@ -172,11 +175,6 @@ func addProject(c *cli.Context) error {
 	path := ""
 	if arg := c.Args().Get(1); arg != "" {
 		path = arg
-	}
-
-	cb, err := codebase.DefaultProvider.Open(cwd)
-	if err != nil {
-		return err
 	}
 
 	if _, err := cb.Add(c.Args().First(), path, parseGitConfig(c.StringSlice("git-config"))); err != nil {
@@ -189,12 +187,7 @@ func addProject(c *cli.Context) error {
 }
 
 func syncCodebase(c *cli.Context) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	cb, err := codebase.DefaultProvider.Open(cwd)
+	cb, err := openCodebase()
 	if err != nil {
 		return err
 	}
@@ -218,12 +211,7 @@ func syncCodebase(c *cli.Context) error {
 }
 
 func pwdCodebase(c *cli.Context) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	cb, err := codebase.DefaultProvider.Open(cwd)
+	cb, err := openCodebase()
 	if err != nil {
 		return err
 	}
@@ -238,12 +226,7 @@ func runCodebase(c *cli.Context) error {
 		return fmt.Errorf("correct usage: srcode run <command>")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	cb, err := codebase.DefaultProvider.Open(cwd)
+	cb, err := openCodebase()
 	if err != nil {
 		return err
 	}
@@ -259,12 +242,7 @@ func runCodebase(c *cli.Context) error {
 }
 
 func lsCodebase(c *cli.Context) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	cb, err := codebase.DefaultProvider.Open(cwd)
+	cb, err := openCodebase()
 	if err != nil {
 		return err
 	}
@@ -292,4 +270,18 @@ func parseGitConfig(args []string) map[string]string {
 	}
 
 	return config
+}
+
+func openCodebase() (codebase.Codebase, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	cb, err := codebase.DefaultProvider.Open(cwd)
+	if err != nil {
+		return nil, err
+	}
+
+	return cb, nil
 }
