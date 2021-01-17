@@ -201,20 +201,25 @@ func syncCodebase(c *cli.Context) error {
 		return err
 	}
 
-	added, removed, err := cb.Sync(c.Bool("delete-removed"))
-	if err != nil {
+	addedChan := make(chan codebase.ProjectEntry)
+	go func() {
+		for entry := range addedChan {
+			fmt.Printf("[+] %s -> %s\n", entry.Project.Remote, entry.Path)
+		}
+	}()
+
+	deletedChan := make(chan codebase.ProjectEntry)
+	go func() {
+		for entry := range deletedChan {
+			fmt.Printf("[-] %s -> %s\n", entry.Project.Remote, entry.Path)
+		}
+	}()
+
+	if err := cb.Sync(c.Bool("delete-removed"), addedChan, deletedChan); err != nil {
 		return err
 	}
 
 	fmt.Println("Successfully synchronized codebase")
-
-	for path, project := range added {
-		fmt.Printf("[+] %s -> %s\n", project.Remote, path)
-	}
-
-	for path, project := range removed {
-		fmt.Printf("[-] %s -> %s\n", project.Remote, path)
-	}
 
 	return nil
 }

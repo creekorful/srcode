@@ -28,7 +28,7 @@ var (
 type Codebase interface {
 	Projects() (map[string]manifest.Project, error)
 	Add(remote, path string, config map[string]string) (manifest.Project, error)
-	Sync(delete bool) (map[string]manifest.Project, map[string]manifest.Project, error)
+	Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error
 	LocalPath() string
 	Run(command string) (string, error)
 }
@@ -113,11 +113,11 @@ func (codebase *codebase) Add(remote, path string, config map[string]string) (ma
 	return man.Projects[path], nil
 }
 
-func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[string]manifest.Project, error) {
+func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error {
 	// read manifest
 	previousMan, err := codebase.readManifest()
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
 	// pull & push
@@ -125,19 +125,18 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 	_ = codebase.repo.Pull("origin", "master")
 
 	if err := codebase.repo.Push("origin", "master"); err != nil {
-		return nil, nil, err
+		return err
 	}
 
 	// read again manifest
 	man, err := codebase.readManifest()
 	if err != nil {
-		return nil, nil, err
+		return err
 	}
 
 	// apply changes (if there are)
 	if !reflect.DeepEqual(previousMan, man) {
 		// Collect new projects
-		addedProjects := map[string]manifest.Project{}
 		for p, project := range man.Projects {
 			found := false
 			for previousPath := range previousMan.Projects {
@@ -149,29 +148,34 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 
 			// project not found in previous manifest
 			if !found {
-				addedProjects[p] = project
+				if addedChan != nil {
+					addedChan <- ProjectEntry{
+						Path:    p,
+						Project: project,
+					}
+				}
 
 				// Clone the project (and don't break in case of error)
 				_, _ = codebase.repoProvider.Clone(project.Remote, filepath.Join(codebase.rootPath, p))
 			}
 
+			// (Re-)Apply the configuration
 			if len(project.Config) > 0 {
 				repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, p))
 				if err != nil {
-					return nil, nil, err
+					return err
 				}
 
 				// No matter what re-apply configuration to currently defined projects
 				for key, value := range project.Config {
 					if err := repo.SetConfig(key, value); err != nil {
-						return nil, nil, err
+						return err
 					}
 				}
 			}
 		}
 
 		// Collect removed projects
-		removedProjects := map[string]manifest.Project{}
 		for previousPath, previousProject := range previousMan.Projects {
 			found := false
 			for p := range man.Projects {
@@ -183,7 +187,12 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 
 			// project not found in current manifest
 			if !found {
-				removedProjects[previousPath] = previousProject
+				if deletedChan != nil {
+					deletedChan <- ProjectEntry{
+						Path:    previousPath,
+						Project: previousProject,
+					}
+				}
 
 				// Remove from disk (and don't break in case of error)
 				if delete {
@@ -191,11 +200,16 @@ func (codebase *codebase) Sync(delete bool) (map[string]manifest.Project, map[st
 				}
 			}
 		}
-
-		return addedProjects, removedProjects, nil
 	}
 
-	return nil, nil, nil
+	if addedChan != nil {
+		close(addedChan)
+	}
+	if deletedChan != nil {
+		close(deletedChan)
+	}
+
+	return nil
 }
 
 func (codebase *codebase) LocalPath() string {

@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Changed
 
 - cmd/clone: Display cloning progress.
+- cmd/sync: Display sync progress.
 
 ## Fixed
 

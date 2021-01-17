@@ -17,7 +17,7 @@ func TestCodebase_Projects(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
-	projects := map[string]manifest.Project{
+	expectedProjects := map[string]manifest.Project{
 		"test/15": {Remote: "test"},
 	}
 
@@ -25,7 +25,7 @@ func TestCodebase_Projects(t *testing.T) {
 	manProviderMock.EXPECT().
 		Read("test-dir/.srcode/manifest.json").
 		Return(manifest.Manifest{
-			Projects: projects,
+			Projects: expectedProjects,
 		}, nil)
 
 	codebase := &codebase{
@@ -38,7 +38,7 @@ func TestCodebase_Projects(t *testing.T) {
 		t.FailNow()
 	}
 
-	if !reflect.DeepEqual(projects, projects) {
+	if !reflect.DeepEqual(projects, expectedProjects) {
 		t.FailNow()
 	}
 }
@@ -252,21 +252,107 @@ func TestCodebase_Sync(t *testing.T) {
 	repoProviderMock.EXPECT().Open(filepath.Join(dir, "test/c/d")).Return(cRepoMock, nil)
 	cRepoMock.EXPECT().SetConfig("user.mail", "alois@micard.lu").Return(nil)
 
-	added, deleted, err := codebase.Sync(true)
-	if err != nil {
+	added := map[string]manifest.Project{}
+	addedChan := make(chan ProjectEntry)
+	go func() {
+		for entry := range addedChan {
+			added[entry.Path] = entry.Project
+		}
+	}()
+
+	deleted := map[string]manifest.Project{}
+	deletedChan := make(chan ProjectEntry)
+	go func() {
+		for entry := range deletedChan {
+			deleted[entry.Path] = entry.Project
+		}
+	}()
+
+	if err := codebase.Sync(true, addedChan, deletedChan); err != nil {
 		t.FailNow()
 	}
 
-	if len(added) != 1 {
+	if len(added) != 1 || added["test-12"].Remote != "test.git" {
 		t.Fail()
 	}
-	if len(deleted) != 1 {
+	if len(deleted) != 1 || deleted["test/a/b"].Remote != "test.git" {
 		t.Fail()
 	}
 
 	// make sure we have deleted the directory
 	if _, err := os.Stat(filepath.Join(dir, "test", "a", "b")); !os.IsNotExist(err) {
 		t.Fail()
+	}
+}
+
+func TestCodebase_Sync_NoChannel(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+	repoMock := repository_mock.NewMockRepository(mockCtrl)
+
+	dir := t.TempDir()
+
+	codebase := &codebase{
+		repoProvider: repoProviderMock,
+		repo:         repoMock,
+		manProvider:  manProviderMock,
+		rootPath:     dir,
+	}
+
+	// create mock directory
+	if err := os.MkdirAll(filepath.Join(dir, "test", "a", "b"), 0750); err != nil {
+		t.FailNow()
+	}
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join(dir, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/a/b": {Remote: "test.git"},
+				"test/c/d": {Remote: "test.git"},
+			},
+		}, nil)
+
+	repoMock.EXPECT().Pull("origin", "master").Return(nil)
+	repoMock.EXPECT().Push("origin", "master").Return(nil)
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join(dir, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test-12": {
+					Remote: "test.git",
+					Config: map[string]string{
+						"user.name": "Aloïs Micard",
+					},
+				},
+				"test/c/d": {
+					Remote: "test.git",
+					Config: map[string]string{
+						"user.mail": "alois@micard.lu",
+					},
+				},
+			},
+		}, nil)
+
+	// should clone missing projects
+	repoProviderMock.EXPECT().
+		Clone("test.git", filepath.Join(dir, "test-12")).
+		Return(nil, nil)
+
+	cRepoMock := repository_mock.NewMockRepository(mockCtrl)
+	repoProviderMock.EXPECT().Open(filepath.Join(dir, "test-12")).Return(cRepoMock, nil)
+	cRepoMock.EXPECT().SetConfig("user.name", "Aloïs Micard").Return(nil) // restore config
+
+	cRepoMock = repository_mock.NewMockRepository(mockCtrl)
+	repoProviderMock.EXPECT().Open(filepath.Join(dir, "test/c/d")).Return(cRepoMock, nil)
+	cRepoMock.EXPECT().SetConfig("user.mail", "alois@micard.lu").Return(nil)
+
+	if err := codebase.Sync(true, nil, nil); err != nil {
+		t.FailNow()
 	}
 }
 
