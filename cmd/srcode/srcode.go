@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"github.com/creekorful/srcode/internal/codebase"
+	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -356,9 +358,23 @@ func lsCodebase(c *cli.Context) error {
 		fmt.Println("No projects found")
 	}
 
-	for path, project := range projects {
-		fmt.Printf("/%s -> %s\n", path, project.Remote)
+	// Sort keys to have re-producible output
+	keys := []string{}
+	for path := range projects {
+		keys = append(keys, path)
 	}
+	sort.Strings(keys)
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Remote", "Path"})
+	table.SetBorder(false)
+
+	for _, path := range keys {
+		project := projects[path]
+		table.Append([]string{project.Remote, path})
+	}
+
+	table.Render()
 
 	return nil
 }
