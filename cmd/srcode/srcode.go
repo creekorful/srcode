@@ -41,7 +41,13 @@ remotely.`,
 					},
 				},
 				Description: `
-This command creates an empty codebase - basically a .srcode directory with manifest file to track the codebase projects.`,
+This command creates an empty codebase - basically a .srcode directory with manifest file to track the codebase projects.
+
+Examples
+
+Initialize a codebase with specific remote:
+
+> srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "clone",
@@ -49,7 +55,13 @@ This command creates an empty codebase - basically a .srcode directory with mani
 				Action:    cloneCodebase,
 				ArgsUsage: "<remote> [<path>]",
 				Description: `
-Clones a codebase into a newly created directory, and install (clone) the existing projects.`,
+Clones a codebase into a newly created directory, and install (clone) the existing projects.
+
+Examples
+
+Clone a codebase into specific directory:
+
+> srcode clone git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "add",
@@ -63,7 +75,13 @@ Clones a codebase into a newly created directory, and install (clone) the existi
 					},
 				},
 				Description: `
-Add a project (git repository) to the current codebase.`,
+Add a project (git repository) to the current codebase.
+
+Examples
+
+Add a project with custom git configuration:
+
+> srcode add --git-config user.email=alois@micard.lu --git-config commit.gpgsign=true git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe`,
 			},
 			{
 				Name:   "sync",
@@ -107,7 +125,13 @@ Display the codebase projects with their details.`,
 				Action:    bulkGitCodebase,
 				ArgsUsage: "<args>",
 				Description: `
-Execute a git command in bulk (over all codebase projects).`,
+Execute a git command in bulk (over all codebase projects).
+
+Examples
+
+Update all repositories to their latests changes:
+
+> srcode bulk-git pull --rebase`,
 			},
 		},
 		Authors: []*cli.Author{{
