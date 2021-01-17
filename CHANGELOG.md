@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Added
+
+- Now create README.md in meta directory to explain how to use it.
+- [#2](https://github.com/creekorful/srcode/issues/2) Implement srcode ls.
+- [#3](https://github.com/creekorful/srcode/issues/3) Implement srcode bulk-git.
+
+## Changed
+
+- cmd/clone: Display cloning progress.
+- cmd/sync: Display sync progress.
+
+## Fixed
+
+- [#1](https://github.com/creekorful/srcode/issues/1) Fix codebase init & clone when using absolute path.
+
 ## [0.1.0] - 2021-01-15
 
 Initial pre-release.

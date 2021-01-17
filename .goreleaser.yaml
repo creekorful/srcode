@@ -17,7 +17,7 @@ builds:
 brews:
   - tap:
       owner: creekorful
-      name: srcode-tap
+      name: homebrew-srcode
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
 
     download_strategy: CurlDownloadStrategy

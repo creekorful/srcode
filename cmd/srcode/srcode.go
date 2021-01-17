@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var (
@@ -93,6 +94,21 @@ Print the codebase working directory - i.e the working directory relative to the
 				Description: `
 Run a command inside a codebase project.`,
 			},
+			{
+				Name:   "ls",
+				Usage:  "Display the codebase projects",
+				Action: lsCodebase,
+				Description: `
+Display the codebase projects with their details.`,
+			},
+			{
+				Name:      "bulk-git",
+				Usage:     "Execute a git command over all projects",
+				Action:    bulkGitCodebase,
+				ArgsUsage: "<args>",
+				Description: `
+Execute a git command in bulk (over all codebase projects).`,
+			},
 		},
 		Authors: []*cli.Author{{
 			Name:  "Aloïs Micard",
@@ -112,18 +128,21 @@ func initCodebase(c *cli.Context) error {
 		return fmt.Errorf("correct usage: srcode init <path>")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
+	path := c.Args().Get(0)
+	if !filepath.IsAbs(path) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+
+		path = filepath.Join(cwd, path)
+	}
+
+	if _, err := codebase.DefaultProvider.Init(path, c.String("remote")); err != nil {
 		return err
 	}
 
-	fullPath := filepath.Join(cwd, c.Args().First())
-
-	if _, err := codebase.DefaultProvider.Init(fullPath, c.String("remote")); err != nil {
-		return err
-	}
-
-	fmt.Printf("Successfully initialized new codebase at: %s\n", fullPath)
+	fmt.Printf("Successfully initialized new codebase at: %s\n", path)
 
 	return nil
 }
@@ -133,18 +152,34 @@ func cloneCodebase(c *cli.Context) error {
 		return fmt.Errorf("correct usage: srcode clone <remote> [<path>]")
 	}
 
-	cwd, err := os.Getwd()
+	path := c.Args().Get(1)
+	if !filepath.IsAbs(path) {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+
+		path = filepath.Join(cwd, path)
+	}
+
+	wg := sync.WaitGroup{}
+
+	// Use goroutine to have un-buffered channel
+	ch := make(chan codebase.ProjectEntry)
+	go func() {
+		wg.Add(1)
+		for entry := range ch {
+			fmt.Printf("Cloned %s -> /%s\n", entry.Project.Remote, entry.Path)
+		}
+		wg.Done()
+	}()
+
+	_, err := codebase.DefaultProvider.Clone(c.Args().First(), path, ch)
+
+	wg.Wait()
+
 	if err != nil {
 		return err
-	}
-
-	path := cwd
-	if arg := c.Args().Get(1); arg != "" {
-		path = filepath.Join(path, arg)
-	}
-
-	if _, err := codebase.DefaultProvider.Clone(c.Args().First(), path); err != nil {
-		return nil
 	}
 
 	fmt.Printf("Successfully cloned codebase from %s to: %s\n", c.Args().First(), path)
@@ -157,7 +192,7 @@ func addProject(c *cli.Context) error {
 		return fmt.Errorf("correct usage: srcode add <remote> [<path>]")
 	}
 
-	cwd, err := os.Getwd()
+	cb, err := openCodebase()
 	if err != nil {
 		return err
 	}
@@ -165,11 +200,6 @@ func addProject(c *cli.Context) error {
 	path := ""
 	if arg := c.Args().Get(1); arg != "" {
 		path = arg
-	}
-
-	cb, err := codebase.DefaultProvider.Open(cwd)
-	if err != nil {
-		return err
 	}
 
 	if _, err := cb.Add(c.Args().First(), path, parseGitConfig(c.StringSlice("git-config"))); err != nil {
@@ -182,41 +212,46 @@ func addProject(c *cli.Context) error {
 }
 
 func syncCodebase(c *cli.Context) error {
-	cwd, err := os.Getwd()
+	cb, err := openCodebase()
 	if err != nil {
 		return err
 	}
 
-	cb, err := codebase.DefaultProvider.Open(cwd)
-	if err != nil {
-		return err
-	}
+	wg := sync.WaitGroup{}
 
-	added, removed, err := cb.Sync(c.Bool("delete-removed"))
+	addedChan := make(chan codebase.ProjectEntry)
+	go func() {
+		wg.Add(1)
+		for entry := range addedChan {
+			fmt.Printf("[+] %s -> %s\n", entry.Project.Remote, entry.Path)
+		}
+		wg.Done()
+	}()
+
+	deletedChan := make(chan codebase.ProjectEntry)
+	go func() {
+		wg.Add(1)
+		for entry := range deletedChan {
+			fmt.Printf("[-] %s -> %s\n", entry.Project.Remote, entry.Path)
+		}
+		wg.Done()
+	}()
+
+	err = cb.Sync(c.Bool("delete-removed"), addedChan, deletedChan)
+
+	wg.Wait()
+
 	if err != nil {
 		return err
 	}
 
 	fmt.Println("Successfully synchronized codebase")
 
-	for path, project := range added {
-		fmt.Printf("[+] %s -> %s\n", project.Remote, path)
-	}
-
-	for path, project := range removed {
-		fmt.Printf("[-] %s -> %s\n", project.Remote, path)
-	}
-
 	return nil
 }
 
 func pwdCodebase(c *cli.Context) error {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	cb, err := codebase.DefaultProvider.Open(cwd)
+	cb, err := openCodebase()
 	if err != nil {
 		return err
 	}
@@ -231,12 +266,7 @@ func runCodebase(c *cli.Context) error {
 		return fmt.Errorf("correct usage: srcode run <command>")
 	}
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	cb, err := codebase.DefaultProvider.Open(cwd)
+	cb, err := openCodebase()
 	if err != nil {
 		return err
 	}
@@ -247,6 +277,56 @@ func runCodebase(c *cli.Context) error {
 	}
 
 	fmt.Printf("%s\n", res)
+
+	return nil
+}
+
+func lsCodebase(c *cli.Context) error {
+	cb, err := openCodebase()
+	if err != nil {
+		return err
+	}
+
+	projects, err := cb.Projects()
+	if err != nil {
+		return err
+	}
+
+	if len(projects) == 0 {
+		fmt.Println("No projects found")
+	}
+
+	for path, project := range projects {
+		fmt.Printf("/%s -> %s\n", path, project.Remote)
+	}
+
+	return nil
+}
+
+func bulkGitCodebase(c *cli.Context) error {
+	cb, err := openCodebase()
+	if err != nil {
+		return err
+	}
+
+	wg := sync.WaitGroup{}
+
+	ch := make(chan string)
+	go func() {
+		wg.Add(1)
+		for out := range ch {
+			fmt.Printf("%s\n\n", out)
+		}
+		wg.Done()
+	}()
+
+	err = cb.BulkGIT(c.Args().Slice(), ch)
+
+	wg.Wait()
+
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -262,4 +342,18 @@ func parseGitConfig(args []string) map[string]string {
 	}
 
 	return config
+}
+
+func openCodebase() (codebase.Codebase, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	cb, err := codebase.DefaultProvider.Open(cwd)
+	if err != nil {
+		return nil, err
+	}
+
+	return cb, nil
 }

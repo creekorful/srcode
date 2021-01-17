@@ -15,6 +15,7 @@ type Repository interface {
 	AddRemote(name, url string) error
 	Config(key string) (string, error)
 	SetConfig(key, value string) error
+	RawCmd(args []string) (string, error)
 }
 
 type gitWrapperRepository struct {
@@ -55,6 +56,10 @@ func (gwr *gitWrapperRepository) Config(key string) (string, error) {
 func (gwr *gitWrapperRepository) SetConfig(key, value string) error {
 	_, err := gwr.execWithOutput("config", key, value)
 	return err
+}
+
+func (gwr *gitWrapperRepository) RawCmd(args []string) (string, error) {
+	return gwr.execWithOutput(args...)
 }
 
 func (gwr *gitWrapperRepository) execWithOutput(args ...string) (string, error) {
