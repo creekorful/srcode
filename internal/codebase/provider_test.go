@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -187,12 +188,16 @@ func TestProvider_Clone(t *testing.T) {
 
 	targetDir := filepath.Join(t.TempDir(), "test-directory")
 
+	wg := sync.WaitGroup{}
+
 	buffer := ""
 	ch := make(chan ProjectEntry)
 	go func() {
+		wg.Add(1)
 		for entry := range ch {
 			buffer = fmt.Sprintf("%s\n%s %s", buffer, entry.Path, entry.Project.Remote)
 		}
+		wg.Done()
 	}()
 
 	// Cloning has fail
@@ -236,6 +241,8 @@ func TestProvider_Clone(t *testing.T) {
 	if err != nil {
 		t.Fail()
 	}
+
+	wg.Wait()
 
 	if val.(*codebase).rootPath != targetDir {
 		t.Fail()

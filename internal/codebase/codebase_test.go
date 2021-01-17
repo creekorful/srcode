@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sync"
 	"testing"
 )
 
@@ -252,25 +253,35 @@ func TestCodebase_Sync(t *testing.T) {
 	repoProviderMock.EXPECT().Open(filepath.Join(dir, "test/c/d")).Return(cRepoMock, nil)
 	cRepoMock.EXPECT().SetConfig("user.mail", "alois@micard.lu").Return(nil)
 
+	wg := sync.WaitGroup{}
+
 	added := map[string]manifest.Project{}
 	addedChan := make(chan ProjectEntry)
 	go func() {
+		wg.Add(1)
 		for entry := range addedChan {
 			added[entry.Path] = entry.Project
 		}
+
+		wg.Done()
 	}()
 
 	deleted := map[string]manifest.Project{}
 	deletedChan := make(chan ProjectEntry)
 	go func() {
+		wg.Add(1)
 		for entry := range deletedChan {
 			deleted[entry.Path] = entry.Project
 		}
+
+		wg.Done()
 	}()
 
 	if err := codebase.Sync(true, addedChan, deletedChan); err != nil {
 		t.FailNow()
 	}
+
+	wg.Wait()
 
 	if len(added) != 1 || added["test-12"].Remote != "test.git" {
 		t.Fail()
