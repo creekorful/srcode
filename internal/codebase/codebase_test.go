@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -422,6 +423,107 @@ func TestCodebase_Run(t *testing.T) {
 
 	// Try to run a global command
 	if res, err := codebase.Run("greet-global"); err != nil || res != "Hello from global command" {
+		t.Fail()
+	}
+}
+
+func TestCodebase_BulkGIT(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+
+	codebase := &codebase{
+		manProvider:  manProviderMock,
+		repoProvider: repoProviderMock,
+		rootPath:     "/etc/code",
+		localPath:    "a",
+	}
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join("/", "etc", "code", metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {},
+				"test/something-2": {},
+			},
+		}, nil)
+
+	for _, path := range []string{"test/something-1", "test/something-2"} {
+		repoMock := repository_mock.NewMockRepository(mockCtrl)
+		repoProviderMock.EXPECT().
+			Open(filepath.Join("/", "etc", "code", path)).
+			Return(repoMock, nil)
+
+		repoMock.EXPECT().
+			RawCmd([]string{"pull", "--rebase"}).
+			Return("", nil)
+	}
+
+	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, nil); err != nil {
+		t.Fail()
+	}
+}
+
+func TestCodebase_BulkGIT_WithOut(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+
+	codebase := &codebase{
+		manProvider:  manProviderMock,
+		repoProvider: repoProviderMock,
+		rootPath:     "/etc/code",
+		localPath:    "a",
+	}
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join("/", "etc", "code", metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {},
+				"test/something-2": {},
+			},
+		}, nil)
+
+	wg := sync.WaitGroup{}
+
+	sb := strings.Builder{}
+	ch := make(chan string)
+	go func() {
+		wg.Add(1)
+		for res := range ch {
+			sb.WriteString(res)
+			sb.WriteString("\n")
+		}
+		wg.Done()
+	}()
+
+	for _, path := range []string{"test/something-1", "test/something-2"} {
+		repoMock := repository_mock.NewMockRepository(mockCtrl)
+		repoProviderMock.EXPECT().
+			Open(filepath.Join("/", "etc", "code", path)).
+			Return(repoMock, nil)
+
+		repoMock.EXPECT().
+			RawCmd([]string{"pull", "--rebase"}).
+			Return(fmt.Sprintf("out: %s", path), nil)
+	}
+
+	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, ch); err != nil {
+		t.Fail()
+	}
+
+	wg.Wait()
+
+	val := sb.String()
+	if !strings.Contains(val, "out: test/something-1") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "out: test/something-2") {
 		t.Fail()
 	}
 }

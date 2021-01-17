@@ -31,6 +31,7 @@ type Codebase interface {
 	Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error
 	LocalPath() string
 	Run(command string) (string, error)
+	BulkGIT(args []string, out chan<- string) error
 }
 
 type codebase struct {
@@ -114,6 +115,15 @@ func (codebase *codebase) Add(remote, path string, config map[string]string) (ma
 }
 
 func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error {
+	defer func() {
+		if addedChan != nil {
+			close(addedChan)
+		}
+		if deletedChan != nil {
+			close(deletedChan)
+		}
+	}()
+
 	// read manifest
 	previousMan, err := codebase.readManifest()
 	if err != nil {
@@ -202,13 +212,6 @@ func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, delet
 		}
 	}
 
-	if addedChan != nil {
-		close(addedChan)
-	}
-	if deletedChan != nil {
-		close(deletedChan)
-	}
-
 	return nil
 }
 
@@ -246,6 +249,37 @@ func (codebase *codebase) Run(command string) (string, error) {
 	// Finally execute the command
 	parts := strings.Split(cmdStr, " ")
 	return cmd.ExecWithOutput(exec.Command(parts[0], parts[1:]...))
+}
+
+func (codebase *codebase) BulkGIT(args []string, out chan<- string) error {
+	defer func() {
+		if out != nil {
+			close(out)
+		}
+	}()
+
+	man, err := codebase.readManifest()
+	if err != nil {
+		return err
+	}
+
+	for path := range man.Projects {
+		repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, path))
+		if err != nil {
+			return err
+		}
+
+		res, err := repo.RawCmd(args)
+		if err != nil {
+			return err
+		}
+
+		if out != nil {
+			out <- res
+		}
+	}
+
+	return nil
 }
 
 func (codebase *codebase) readManifest() (manifest.Manifest, error) {

@@ -152,6 +152,12 @@ func (provider *provider) Open(path string) (Codebase, error) {
 }
 
 func (provider *provider) Clone(url, path string, ch chan<- ProjectEntry) (Codebase, error) {
+	defer func() {
+		if ch != nil {
+			close(ch)
+		}
+	}()
+
 	exist, err := codebaseExists(path)
 	if err != nil {
 		return nil, err
@@ -196,10 +202,6 @@ func (provider *provider) Clone(url, path string, ch chan<- ProjectEntry) (Codeb
 				Project: project,
 			}
 		}
-	}
-
-	if ch != nil {
-		close(ch)
 	}
 
 	return codebase, nil

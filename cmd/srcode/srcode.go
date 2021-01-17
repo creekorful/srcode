@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 var (
@@ -100,6 +101,14 @@ Run a command inside a codebase project.`,
 				Description: `
 Display the codebase projects with their details.`,
 			},
+			{
+				Name:      "bulk-git",
+				Usage:     "Execute a git command over all projects",
+				Action:    bulkGitCodebase,
+				ArgsUsage: "<args>",
+				Description: `
+Execute a git command in bulk (over all codebase projects).`,
+			},
 		},
 		Authors: []*cli.Author{{
 			Name:  "Aloïs Micard",
@@ -153,17 +162,24 @@ func cloneCodebase(c *cli.Context) error {
 		path = filepath.Join(cwd, path)
 	}
 
-	ch := make(chan codebase.ProjectEntry)
+	wg := sync.WaitGroup{}
 
 	// Use goroutine to have un-buffered channel
+	ch := make(chan codebase.ProjectEntry)
 	go func() {
+		wg.Add(1)
 		for entry := range ch {
 			fmt.Printf("Cloned %s -> /%s\n", entry.Project.Remote, entry.Path)
 		}
+		wg.Done()
 	}()
 
-	if _, err := codebase.DefaultProvider.Clone(c.Args().First(), path, ch); err != nil {
-		return nil
+	_, err := codebase.DefaultProvider.Clone(c.Args().First(), path, ch)
+
+	wg.Wait()
+
+	if err != nil {
+		return err
 	}
 
 	fmt.Printf("Successfully cloned codebase from %s to: %s\n", c.Args().First(), path)
@@ -201,21 +217,31 @@ func syncCodebase(c *cli.Context) error {
 		return err
 	}
 
+	wg := sync.WaitGroup{}
+
 	addedChan := make(chan codebase.ProjectEntry)
 	go func() {
+		wg.Add(1)
 		for entry := range addedChan {
 			fmt.Printf("[+] %s -> %s\n", entry.Project.Remote, entry.Path)
 		}
+		wg.Done()
 	}()
 
 	deletedChan := make(chan codebase.ProjectEntry)
 	go func() {
+		wg.Add(1)
 		for entry := range deletedChan {
 			fmt.Printf("[-] %s -> %s\n", entry.Project.Remote, entry.Path)
 		}
+		wg.Done()
 	}()
 
-	if err := cb.Sync(c.Bool("delete-removed"), addedChan, deletedChan); err != nil {
+	err = cb.Sync(c.Bool("delete-removed"), addedChan, deletedChan)
+
+	wg.Wait()
+
+	if err != nil {
 		return err
 	}
 
@@ -272,6 +298,34 @@ func lsCodebase(c *cli.Context) error {
 
 	for path, project := range projects {
 		fmt.Printf("/%s -> %s\n", path, project.Remote)
+	}
+
+	return nil
+}
+
+func bulkGitCodebase(c *cli.Context) error {
+	cb, err := openCodebase()
+	if err != nil {
+		return err
+	}
+
+	wg := sync.WaitGroup{}
+
+	ch := make(chan string)
+	go func() {
+		wg.Add(1)
+		for out := range ch {
+			fmt.Printf("%s\n\n", out)
+		}
+		wg.Done()
+	}()
+
+	err = cb.BulkGIT(c.Args().Slice(), ch)
+
+	wg.Wait()
+
+	if err != nil {
+		return err
 	}
 
 	return nil
