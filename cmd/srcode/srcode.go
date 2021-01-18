@@ -171,6 +171,20 @@ Link a project local test command to the previously defined global alias:
 Now you can use 'srcode run test' or 'srcode test' to execute the command
 from project directory.`,
 			},
+			{
+				Name:      "mv",
+				Usage:     "Move a project",
+				Action:    mvCodebase,
+				ArgsUsage: "<src> <dst>",
+				Description: `
+Move a project inside the codebase. This will move the physical folder
+as well as update the manifest to reflect the changes.
+
+Examples
+
+> srcode mv Personal/super-project OldStuff/super-project-42
+`,
+			},
 		},
 		Authors: []*cli.Author{{
 			Name:  "Aloïs Micard",
@@ -359,7 +373,7 @@ func lsCodebase(c *cli.Context) error {
 	}
 
 	// Sort keys to have re-producible output
-	keys := []string{}
+	var keys []string
 	for path := range projects {
 		keys = append(keys, path)
 	}
@@ -418,6 +432,25 @@ func setCmdCodebase(c *cli.Context) error {
 	}
 
 	return cb.SetCommand(c.Args().First(), strings.Join(c.Args().Tail(), " "), c.Bool("global"))
+}
+
+func mvCodebase(c *cli.Context) error {
+	if c.NArg() < 2 {
+		return fmt.Errorf("correct usage: srcode mv <src> <dst>")
+	}
+
+	cb, err := openCodebase()
+	if err != nil {
+		return err
+	}
+
+	if err := cb.MoveProject(c.Args().First(), c.Args().Get(1)); err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully moved from %s to %s\n", c.Args().First(), c.Args().Get(1))
+
+	return nil
 }
 
 func parseGitConfig(args []string) map[string]string {

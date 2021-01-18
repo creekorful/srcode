@@ -7,6 +7,7 @@ import (
 	"github.com/creekorful/srcode/internal/manifest_mock"
 	"github.com/creekorful/srcode/internal/repository_mock"
 	"github.com/golang/mock/gomock"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -634,6 +635,135 @@ func TestCodebase_SetCommand(t *testing.T) {
 	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
 
 	if err := codebase.SetCommand("test", "test", true); err != nil {
+		t.Fail()
+	}
+}
+
+func TestCodebase_MoveProject(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+	repoMock := repository_mock.NewMockRepository(mockCtrl)
+
+	path := t.TempDir()
+
+	codebase := &codebase{
+		manProvider: manProviderMock,
+		repo:        repoMock,
+		rootPath:    path,
+	}
+
+	// Create dummy directories & files to simulate projects
+	if err := os.MkdirAll(filepath.Join(path, "test", "something-1"), 0750); err != nil {
+		t.FailNow()
+	}
+	if err := ioutil.WriteFile(filepath.Join(path, "test", "something-1", "README.md"),
+		[]byte("Hello from something-1"), 0640); err != nil {
+		t.FailNow()
+	}
+	if err := os.MkdirAll(filepath.Join(path, "test", "something-2"), 0750); err != nil {
+		t.FailNow()
+	}
+	if err := ioutil.WriteFile(filepath.Join(path, "test", "something-2", "README.md"),
+		[]byte("Hello from something-2"), 0640); err != nil {
+		t.FailNow()
+	}
+
+	// Move src doesn't exist full path
+	manProviderMock.EXPECT().
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Times(6).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {Remote: "test-1.git"},
+				"test/something-2": {Remote: "test-2.git"},
+			},
+		}, nil)
+
+	if err := codebase.MoveProject("test-1/something", "test-2/something"); !errors.Is(err, ErrNoProjectFound) {
+		t.Errorf("wrong error (got: %s, want: %s)", err, ErrNoProjectFound)
+	}
+
+	// Move src doesn't exist relative path
+	codebase.localPath = "test-1"
+	if err := codebase.MoveProject("something", "test-2/something"); !errors.Is(err, ErrNoProjectFound) {
+		t.Errorf("wrong error (got: %s, want: %s)", err, ErrNoProjectFound)
+	}
+
+	// Move dest exist full path
+	codebase.localPath = ""
+	if err := codebase.MoveProject("test/something-1", "test/something-2"); !errors.Is(err, ErrPathTaken) {
+		t.Errorf("wrong error (got: %s, want: %s)", err, ErrPathTaken)
+	}
+
+	// Move dest exist relative path
+	codebase.localPath = "test"
+	if err := codebase.MoveProject("something-1", "something-2"); !errors.Is(err, ErrPathTaken) {
+		t.Errorf("wrong error (got: %s, want: %s)", err, ErrPathTaken)
+	}
+
+	// Move works full path
+	codebase.localPath = ""
+
+	repoMock.EXPECT().CommitFiles("Moved test-1.git from test/something-1 to test/something", "manifest.json")
+	manProviderMock.EXPECT().
+		Write(filepath.Join(codebase.rootPath, metaDir, manifestFile), manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something":   {Remote: "test-1.git"},
+				"test/something-2": {Remote: "test-2.git"},
+			},
+		})
+
+	if err := codebase.MoveProject("test/something-1", "test/something"); err != nil {
+		t.Errorf("MoveProject() has failed: %s", err)
+	}
+
+	// Make sure we have really moved the files
+	if _, err := os.Stat(filepath.Join(path, "test", "something-1")); !os.IsNotExist(err) {
+		t.Errorf("We haven't moved %s", filepath.Join(path, "test", "something-1"))
+	}
+	if _, err := os.Stat(filepath.Join(path, "test", "something")); err != nil {
+		t.Errorf("We haven't moved %s", filepath.Join(path, "test", "something-1"))
+	}
+
+	b, err := ioutil.ReadFile(filepath.Join(path, "test", "something", "README.md"))
+	if err != nil {
+		t.FailNow()
+	}
+	if string(b) != "Hello from something-1" {
+		t.Fail()
+	}
+
+	// Move works relative path
+	codebase.localPath = "test"
+
+	repoMock.EXPECT().CommitFiles("Moved test-2.git from test/something-2 to test/something-1", "manifest.json")
+	manProviderMock.EXPECT().
+		Write(filepath.Join(codebase.rootPath, metaDir, manifestFile), manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something":   {Remote: "test-1.git"},
+				"test/something-1": {Remote: "test-2.git"},
+			},
+		})
+
+	if err := codebase.MoveProject("something-2", "something-1"); err != nil {
+		t.Errorf("MoveProject() has failed: %s", err)
+	}
+
+	// Make sure we have really moved the files
+	if _, err := os.Stat(filepath.Join(path, "test", "something-2")); !os.IsNotExist(err) {
+		t.Errorf("We haven't moved %s", filepath.Join(path, "test", "something-2"))
+	}
+	if _, err := os.Stat(filepath.Join(path, "test", "something-1")); err != nil {
+		t.Errorf("We haven't moved %s", filepath.Join(path, "test", "something-2"))
+	}
+
+	b, err = ioutil.ReadFile(filepath.Join(path, "test", "something-1", "README.md"))
+	if err != nil {
+		t.FailNow()
+	}
+	if string(b) != "Hello from something-2" {
 		t.Fail()
 	}
 }
