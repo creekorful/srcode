@@ -19,7 +19,7 @@ var (
 	// ErrPathTaken is returned when a project already exist at given path
 	ErrPathTaken = errors.New("a project already exist at given path")
 	// ErrNoProjectFound is returned when no project exist at given path
-	ErrNoProjectFound = errors.New("no project exist at current path")
+	ErrNoProjectFound = errors.New("no project exist at given path")
 	// ErrCommandNotFound is returned when given command is not found
 	ErrCommandNotFound = errors.New("no command with the name found")
 )
@@ -32,6 +32,8 @@ type Codebase interface {
 	LocalPath() string
 	Run(command string) (string, error)
 	BulkGIT(args []string, out chan<- string) error
+	SetCommand(name, command string, global bool) error
+	MoveProject(oldPath, newPath string) error
 }
 
 type codebase struct {
@@ -277,6 +279,110 @@ func (codebase *codebase) BulkGIT(args []string, out chan<- string) error {
 		if out != nil {
 			out <- res
 		}
+	}
+
+	return nil
+}
+
+func (codebase *codebase) SetCommand(name, command string, global bool) error {
+	man, err := codebase.readManifest()
+	if err != nil {
+		return err
+	}
+
+	// This is a global command
+	if global {
+		if man.Commands == nil {
+			man.Commands = map[string]string{}
+		}
+
+		man.Commands[name] = command
+
+		if err := codebase.writeManifest(man); err != nil {
+			return err
+		}
+
+		if err := codebase.repo.CommitFiles(
+			fmt.Sprintf("Add command `%s`: `%s`", name, command),
+			manifestFile,
+		); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	project, exist := man.Projects[codebase.localPath]
+
+	if !exist {
+		return ErrNoProjectFound
+	}
+
+	if project.Commands == nil {
+		project.Commands = map[string]string{}
+	}
+
+	project.Commands[name] = command
+	man.Projects[codebase.localPath] = project
+
+	if err := codebase.writeManifest(man); err != nil {
+		return err
+	}
+
+	if err := codebase.repo.CommitFiles(
+		fmt.Sprintf("Add command `%s`: `%s`", name, command),
+		manifestFile,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (codebase *codebase) MoveProject(oldPath, newPath string) error {
+	man, err := codebase.readManifest()
+	if err != nil {
+		return err
+	}
+
+	oldPath = filepath.Join(codebase.localPath, oldPath)
+	newPath = filepath.Join(codebase.localPath, newPath)
+
+	if _, exist := man.Projects[oldPath]; !exist {
+		return ErrNoProjectFound
+	}
+
+	if _, exist := man.Projects[newPath]; exist {
+		return ErrPathTaken
+	}
+
+	oldDiskPath := filepath.Join(codebase.rootPath, oldPath)
+	newDiskPath := filepath.Join(codebase.rootPath, newPath)
+
+	// Create any missing parent directories
+	if parentDir := filepath.Dir(newDiskPath); parentDir != "." {
+		if err := os.MkdirAll(parentDir, 0750); err != nil {
+			return nil
+		}
+	}
+
+	// Finally move the project
+	if err := os.Rename(oldDiskPath, newDiskPath); err != nil {
+		return err
+	}
+
+	// Update the manifest
+	project := man.Projects[oldPath]
+	delete(man.Projects, oldPath)
+	man.Projects[newPath] = project
+
+	if err := codebase.writeManifest(man); err != nil {
+		return err
+	}
+
+	msg := fmt.Sprintf("Moved %s from %s to %s", project.Remote, oldPath, newPath)
+	if err := codebase.repo.CommitFiles(msg, manifestFile); err != nil {
+		return err
 	}
 
 	return nil

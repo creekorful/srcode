@@ -3,9 +3,11 @@ package main
 import (
 	"fmt"
 	"github.com/creekorful/srcode/internal/codebase"
+	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -41,7 +43,13 @@ remotely.`,
 					},
 				},
 				Description: `
-This command creates an empty codebase - basically a .srcode directory with manifest file to track the codebase projects.`,
+This command creates an empty codebase - basically a .srcode directory with manifest file to track the codebase projects.
+
+Examples
+
+Initialize a codebase with specific remote:
+
+> srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "clone",
@@ -49,7 +57,13 @@ This command creates an empty codebase - basically a .srcode directory with mani
 				Action:    cloneCodebase,
 				ArgsUsage: "<remote> [<path>]",
 				Description: `
-Clones a codebase into a newly created directory, and install (clone) the existing projects.`,
+Clones a codebase into a newly created directory, and install (clone) the existing projects.
+
+Examples
+
+Clone a codebase into specific directory:
+
+> srcode clone git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "add",
@@ -63,7 +77,13 @@ Clones a codebase into a newly created directory, and install (clone) the existi
 					},
 				},
 				Description: `
-Add a project (git repository) to the current codebase.`,
+Add a project (git repository) to the current codebase.
+
+Examples
+
+Add a project with custom git configuration:
+
+> srcode add --git-config user.email=alois@micard.lu --git-config commit.gpgsign=true git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe`,
 			},
 			{
 				Name:   "sync",
@@ -92,7 +112,15 @@ Print the codebase working directory - i.e the working directory relative to the
 				Action:    runCodebase,
 				ArgsUsage: "<command>",
 				Description: `
-Run a command inside a codebase project.`,
+Run a command inside a codebase project.
+
+Examples
+
+> srcode run lint
+
+Or
+
+> srcode lint`,
 			},
 			{
 				Name:   "ls",
@@ -107,7 +135,55 @@ Display the codebase projects with their details.`,
 				Action:    bulkGitCodebase,
 				ArgsUsage: "<args>",
 				Description: `
-Execute a git command in bulk (over all codebase projects).`,
+Execute a git command in bulk (over all codebase projects).
+
+Examples
+
+Update all repositories to their latest changes:
+
+> srcode bulk-git pull --rebase`,
+			},
+			{
+				Name:      "set-cmd",
+				Usage:     "Add a codebase command",
+				Action:    setCmdCodebase,
+				ArgsUsage: "<name> <command>",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "global",
+						Usage: "If true make the command global",
+					},
+				},
+				Description: `
+Add a command to the codebase, either at global level (--global) or
+at project level.
+
+Examples
+
+Create a global go-test command:
+
+> srcode set-cmd --global go-test go test -v ./...
+
+Link a project local test command to the previously defined global alias:
+
+> srcode set-cmd test @go-test
+
+Now you can use 'srcode run test' or 'srcode test' to execute the command
+from project directory.`,
+			},
+			{
+				Name:      "mv",
+				Usage:     "Move a project",
+				Action:    mvCodebase,
+				ArgsUsage: "<src> <dst>",
+				Description: `
+Move a project inside the codebase. This will move the physical folder
+as well as update the manifest to reflect the changes.
+
+Examples
+
+> srcode mv Personal/super-project OldStuff/super-project-42
+`,
 			},
 		},
 		Authors: []*cli.Author{{
@@ -124,7 +200,7 @@ Execute a git command in bulk (over all codebase projects).`,
 }
 
 func initCodebase(c *cli.Context) error {
-	if c.Args().Len() != 1 {
+	if c.NArg() != 1 {
 		return fmt.Errorf("correct usage: srcode init <path>")
 	}
 
@@ -148,7 +224,7 @@ func initCodebase(c *cli.Context) error {
 }
 
 func cloneCodebase(c *cli.Context) error {
-	if c.Args().Len() < 1 {
+	if c.NArg() < 1 {
 		return fmt.Errorf("correct usage: srcode clone <remote> [<path>]")
 	}
 
@@ -188,7 +264,7 @@ func cloneCodebase(c *cli.Context) error {
 }
 
 func addProject(c *cli.Context) error {
-	if c.Args().Len() < 1 {
+	if c.NArg() < 1 {
 		return fmt.Errorf("correct usage: srcode add <remote> [<path>]")
 	}
 
@@ -296,9 +372,23 @@ func lsCodebase(c *cli.Context) error {
 		fmt.Println("No projects found")
 	}
 
-	for path, project := range projects {
-		fmt.Printf("/%s -> %s\n", path, project.Remote)
+	// Sort keys to have re-producible output
+	var keys []string
+	for path := range projects {
+		keys = append(keys, path)
 	}
+	sort.Strings(keys)
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Remote", "Path"})
+	table.SetBorder(false)
+
+	for _, path := range keys {
+		project := projects[path]
+		table.Append([]string{project.Remote, path})
+	}
+
+	table.Render()
 
 	return nil
 }
@@ -327,6 +417,38 @@ func bulkGitCodebase(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func setCmdCodebase(c *cli.Context) error {
+	if c.NArg() < 2 {
+		return fmt.Errorf("correct usage: srcode set-cmd <name> <command>")
+	}
+
+	cb, err := openCodebase()
+	if err != nil {
+		return err
+	}
+
+	return cb.SetCommand(c.Args().First(), strings.Join(c.Args().Tail(), " "), c.Bool("global"))
+}
+
+func mvCodebase(c *cli.Context) error {
+	if c.NArg() < 2 {
+		return fmt.Errorf("correct usage: srcode mv <src> <dst>")
+	}
+
+	cb, err := openCodebase()
+	if err != nil {
+		return err
+	}
+
+	if err := cb.MoveProject(c.Args().First(), c.Args().Get(1)); err != nil {
+		return err
+	}
+
+	fmt.Printf("Successfully moved from %s to %s\n", c.Args().First(), c.Args().Get(1))
 
 	return nil
 }
