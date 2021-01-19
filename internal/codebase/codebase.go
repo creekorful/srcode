@@ -8,6 +8,7 @@ import (
 	"github.com/creekorful/srcode/internal/cmd"
 	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/creekorful/srcode/internal/repository"
+	"golang.org/x/sync/errgroup"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -148,9 +149,14 @@ func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, delet
 
 	// apply changes (if there are)
 	if !reflect.DeepEqual(previousMan, man) {
+		g := errgroup.Group{}
+
 		// Collect new projects
 		for p, project := range man.Projects {
+			p := p
+			project := project
 			found := false
+
 			for previousPath := range previousMan.Projects {
 				if p == previousPath {
 					found = true
@@ -158,33 +164,41 @@ func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, delet
 				}
 			}
 
-			// project not found in previous manifest
-			if !found {
-				if addedChan != nil {
-					addedChan <- ProjectEntry{
-						Path:    p,
-						Project: project,
+			g.Go(func() error {
+				// project not found in previous manifest
+				if !found {
+					if addedChan != nil {
+						addedChan <- ProjectEntry{
+							Path:    p,
+							Project: project,
+						}
 					}
+
+					// Clone the project (and don't break in case of error)
+					_, _ = codebase.repoProvider.Clone(project.Remote, filepath.Join(codebase.rootPath, p))
 				}
 
-				// Clone the project (and don't break in case of error)
-				_, _ = codebase.repoProvider.Clone(project.Remote, filepath.Join(codebase.rootPath, p))
-			}
-
-			// (Re-)Apply the configuration
-			if len(project.Config) > 0 {
-				repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, p))
-				if err != nil {
-					return err
-				}
-
-				// No matter what re-apply configuration to currently defined projects
-				for key, value := range project.Config {
-					if err := repo.SetConfig(key, value); err != nil {
+				// (Re-)Apply the configuration
+				if len(project.Config) > 0 {
+					repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, p))
+					if err != nil {
 						return err
 					}
+
+					// No matter what re-apply configuration to currently defined projects
+					for key, value := range project.Config {
+						if err := repo.SetConfig(key, value); err != nil {
+							return err
+						}
+					}
 				}
-			}
+
+				return nil
+			})
+		}
+
+		if err := g.Wait(); err != nil {
+			return err
 		}
 
 		// Collect removed projects

@@ -7,6 +7,7 @@ import (
 	"github.com/creekorful/srcode/internal/fs"
 	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/creekorful/srcode/internal/repository"
+	"golang.org/x/sync/errgroup"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -184,24 +185,36 @@ func (provider *provider) Clone(url, path string, ch chan<- ProjectEntry) (Codeb
 	}
 
 	// Clone back project & configure them if needed
+	g := errgroup.Group{}
 	for projectPath, project := range projects {
-		repo, err := provider.repoProvider.Clone(project.Remote, filepath.Join(path, projectPath))
-		if err != nil {
-			return nil, err
-		}
+		projectPath := projectPath
+		project := project
 
-		for key, value := range project.Config {
-			if err := repo.SetConfig(key, value); err != nil {
-				return nil, err
+		g.Go(func() error {
+			repo, err := provider.repoProvider.Clone(project.Remote, filepath.Join(path, projectPath))
+			if err != nil {
+				return err
 			}
-		}
 
-		if ch != nil {
-			ch <- ProjectEntry{
-				Path:    projectPath,
-				Project: project,
+			for key, value := range project.Config {
+				if err := repo.SetConfig(key, value); err != nil {
+					return err
+				}
 			}
-		}
+
+			if ch != nil {
+				ch <- ProjectEntry{
+					Path:    projectPath,
+					Project: project,
+				}
+			}
+
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	return codebase, nil
