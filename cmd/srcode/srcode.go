@@ -386,6 +386,10 @@ func lsCodebase(c *cli.Context) error {
 }
 
 func bulkGitCodebase(c *cli.Context) error {
+	if c.NArg() < 1 {
+		return fmt.Errorf("correct usage: srcode bulk-git <args>")
+	}
+
 	cb, err := openCodebase()
 	if err != nil {
 		return err

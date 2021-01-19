@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improve speed of clone/sync by using goroutines.
 
+## Fixed
+
+- bulk-git: fails if no args provided.
+
 ## [0.3.0] -  2021-01-18
 
 ## Added
