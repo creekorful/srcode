@@ -121,7 +121,12 @@ Examples
 				},
 				Description: `
 Synchronize the codebase with the linked remote - i.e install & configure new project and remove removed ones,
-while pushing the changes.`,
+while pushing the changes.
+
+Examples
+
+- Synchronize with remote and delete removed projects:
+  $ srcode sync --delete-removed`,
 			},
 			{
 				Name:   "pwd",
