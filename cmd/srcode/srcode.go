@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/creekorful/srcode/internal/codebase"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -16,10 +18,35 @@ var (
 	// Version is updated by goreleaser using ldflags
 	// https://goreleaser.com/environment/
 	version = "dev"
+
+	errWrongInitUsage       = errors.New("correct usage: srcode init <path>")
+	errWrongCloneUsage      = errors.New("correct usage: srcode clone <remote> [<path>]")
+	errWrongAddProjectUsage = errors.New("correct usage: srcode add <remote> [<path>]")
+	errWrongRunUsage        = errors.New("correct usage: srcode run <command>")
+	errWrongBulkGitUsage    = errors.New("correct usage: srcode bulk-git <args>")
+	errWrongSetCmdUsage     = errors.New("correct usage: srcode set-cmd <name> <command>")
+	errWrongMvUsage         = errors.New("correct usage: srcode mv <src> <dst>")
 )
 
 func main() {
-	app := cli.App{
+	app := app{
+		codebaseProvider: codebase.DefaultProvider,
+		writer:           os.Stdout,
+	}
+
+	if err := app.getCliApp().Run(os.Args); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
+		os.Exit(1)
+	}
+}
+
+type app struct {
+	codebaseProvider codebase.Provider
+	writer           io.Writer
+}
+
+func (app *app) getCliApp() *cli.App {
+	return &cli.App{
 		Name:    "srcode",
 		Usage:   "Source code manager",
 		Version: version,
@@ -34,7 +61,7 @@ remotely.`,
 			{
 				Name:      "init",
 				Usage:     "Create an empty codebase",
-				Action:    initCodebase,
+				Action:    app.initCodebase,
 				ArgsUsage: "<path>",
 				Flags: []cli.Flag{
 					&cli.StringFlag{
@@ -47,28 +74,26 @@ This command creates an empty codebase - basically a .srcode directory with mani
 
 Examples
 
-Initialize a codebase with specific remote:
-
-> srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
+- Initialize a codebase with specific remote:
+  srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "clone",
 				Usage:     "Clone a codebase into a new directory",
-				Action:    cloneCodebase,
+				Action:    app.cloneCodebase,
 				ArgsUsage: "<remote> [<path>]",
 				Description: `
 Clones a codebase into a newly created directory, and install (clone) the existing projects.
 
 Examples
 
-Clone a codebase into specific directory:
-
-> srcode clone git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
+- Clone a codebase into specific directory:
+  srcode clone git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "add",
 				Usage:     "Add a project to the codebase",
-				Action:    addProject,
+				Action:    app.addProject,
 				ArgsUsage: "<remote> [<path>]",
 				Flags: []cli.Flag{
 					&cli.StringSliceFlag{
@@ -81,14 +106,13 @@ Add a project (git repository) to the current codebase.
 
 Examples
 
-Add a project with custom git configuration:
-
-> srcode add --git-config user.email=alois@micard.lu --git-config commit.gpgsign=true git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe`,
+- Add a project with custom git configuration:
+  srcode add --git-config user.email=alois@micard.lu --git-config commit.gpgsign=true git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe`,
 			},
 			{
 				Name:   "sync",
 				Usage:  "Synchronize the codebase with the linked remote",
-				Action: syncCodebase,
+				Action: app.syncCodebase,
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "delete-removed",
@@ -102,51 +126,48 @@ while pushing the changes.`,
 			{
 				Name:   "pwd",
 				Usage:  "Print codebase working directory",
-				Action: pwdCodebase,
+				Action: app.pwd,
 				Description: `
 Print the codebase working directory - i.e the working directory relative to the codebase root.`,
 			},
 			{
 				Name:      "run",
 				Usage:     "Run a codebase command",
-				Action:    runCodebase,
+				Action:    app.runCmd,
 				ArgsUsage: "<command>",
 				Description: `
 Run a command inside a codebase project.
 
 Examples
 
-> srcode run lint
-
-Or
-
-> srcode lint`,
+- Execute a command named lint:
+  srcode run lint
+  srcode lint`,
 			},
 			{
 				Name:   "ls",
 				Usage:  "Display the codebase projects",
-				Action: lsCodebase,
+				Action: app.lsProjects,
 				Description: `
 Display the codebase projects with their details.`,
 			},
 			{
 				Name:      "bulk-git",
 				Usage:     "Execute a git command over all projects",
-				Action:    bulkGitCodebase,
+				Action:    app.bulkGit,
 				ArgsUsage: "<args>",
 				Description: `
 Execute a git command in bulk (over all codebase projects).
 
 Examples
 
-Update all repositories to their latest changes:
-
-> srcode bulk-git pull --rebase`,
+- Update all repositories to their latest changes:
+  srcode bulk-git pull --rebase`,
 			},
 			{
 				Name:      "set-cmd",
 				Usage:     "Add a codebase command",
-				Action:    setCmdCodebase,
+				Action:    app.setCmd,
 				ArgsUsage: "<name> <command>",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
@@ -160,13 +181,11 @@ at project level.
 
 Examples
 
-Create a global go-test command:
+- Create a global go-test command:
+  srcode set-cmd --global go-test go test -v ./...
 
-> srcode set-cmd --global go-test go test -v ./...
-
-Link a project local test command to the previously defined global alias:
-
-> srcode set-cmd test @go-test
+- Link a project local test command to the previously defined global alias:
+  srcode set-cmd test @go-test
 
 Now you can use 'srcode run test' or 'srcode test' to execute the command
 from project directory.`,
@@ -174,7 +193,7 @@ from project directory.`,
 			{
 				Name:      "mv",
 				Usage:     "Move a project",
-				Action:    mvCodebase,
+				Action:    app.mvProject,
 				ArgsUsage: "<src> <dst>",
 				Description: `
 Move a project inside the codebase. This will move the physical folder
@@ -182,26 +201,21 @@ as well as update the manifest to reflect the changes.
 
 Examples
 
-> srcode mv Personal/super-project OldStuff/super-project-42
-`,
+- Move project from Personal/super-project to OldStuff/super-project-42:
+  srcode mv Personal/super-project OldStuff/super-project-42`,
 			},
 		},
 		Authors: []*cli.Author{{
 			Name:  "Aloïs Micard",
 			Email: "alois@micard.lu",
 		}},
-		Action: runCodebase, // shortcut: use srcode <command> to execute a codebase command easily
-	}
-
-	if err := app.Run(os.Args); err != nil {
-		_, _ = fmt.Fprintf(os.Stderr, "%s\n", err)
-		os.Exit(1)
+		Action: app.runCmd, // shortcut: use srcode <command> to execute a codebase command easily
 	}
 }
 
-func initCodebase(c *cli.Context) error {
+func (app *app) initCodebase(c *cli.Context) error {
 	if c.NArg() != 1 {
-		return fmt.Errorf("correct usage: srcode init <path>")
+		return errWrongInitUsage
 	}
 
 	path := c.Args().Get(0)
@@ -214,18 +228,18 @@ func initCodebase(c *cli.Context) error {
 		path = filepath.Join(cwd, path)
 	}
 
-	if _, err := codebase.DefaultProvider.Init(path, c.String("remote")); err != nil {
+	if _, err := app.codebaseProvider.Init(path, c.String("remote")); err != nil {
 		return err
 	}
 
-	fmt.Printf("Successfully initialized new codebase at: %s\n", path)
+	_, _ = fmt.Fprintf(app.writer, "Successfully initialized new codebase at: %s\n", path)
 
 	return nil
 }
 
-func cloneCodebase(c *cli.Context) error {
+func (app *app) cloneCodebase(c *cli.Context) error {
 	if c.NArg() < 1 {
-		return fmt.Errorf("correct usage: srcode clone <remote> [<path>]")
+		return errWrongCloneUsage
 	}
 
 	path := c.Args().Get(1)
@@ -242,15 +256,16 @@ func cloneCodebase(c *cli.Context) error {
 
 	// Use goroutine to have un-buffered channel
 	ch := make(chan codebase.ProjectEntry)
+
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		for entry := range ch {
-			fmt.Printf("Cloned %s -> /%s\n", entry.Project.Remote, entry.Path)
+			_, _ = fmt.Fprintf(app.writer, "Cloned %s -> /%s\n", entry.Project.Remote, entry.Path)
 		}
 		wg.Done()
 	}()
 
-	_, err := codebase.DefaultProvider.Clone(c.Args().First(), path, ch)
+	_, err := app.codebaseProvider.Clone(c.Args().First(), path, ch)
 
 	wg.Wait()
 
@@ -258,17 +273,17 @@ func cloneCodebase(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Successfully cloned codebase from %s to: %s\n", c.Args().First(), path)
+	_, _ = fmt.Fprintf(app.writer, "Successfully cloned codebase from %s to: %s\n", c.Args().First(), path)
 
 	return nil
 }
 
-func addProject(c *cli.Context) error {
+func (app *app) addProject(c *cli.Context) error {
 	if c.NArg() < 1 {
-		return fmt.Errorf("correct usage: srcode add <remote> [<path>]")
+		return errWrongAddProjectUsage
 	}
 
-	cb, err := openCodebase()
+	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
@@ -282,13 +297,16 @@ func addProject(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Successfully added %s to: %s\n", c.Args().First(), path)
+	// little display trick
+	path = "/" + path
+
+	_, _ = fmt.Fprintf(app.writer, "Successfully added %s to: %s\n", c.Args().First(), path)
 
 	return nil
 }
 
-func syncCodebase(c *cli.Context) error {
-	cb, err := openCodebase()
+func (app *app) syncCodebase(c *cli.Context) error {
+	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
@@ -296,19 +314,19 @@ func syncCodebase(c *cli.Context) error {
 	wg := sync.WaitGroup{}
 
 	addedChan := make(chan codebase.ProjectEntry)
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		for entry := range addedChan {
-			fmt.Printf("[+] %s -> %s\n", entry.Project.Remote, entry.Path)
+			_, _ = fmt.Fprintf(app.writer, "[+] %s -> %s\n", entry.Project.Remote, entry.Path)
 		}
 		wg.Done()
 	}()
 
 	deletedChan := make(chan codebase.ProjectEntry)
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		for entry := range deletedChan {
-			fmt.Printf("[-] %s -> %s\n", entry.Project.Remote, entry.Path)
+			_, _ = fmt.Fprintf(app.writer, "[-] %s -> %s\n", entry.Project.Remote, entry.Path)
 		}
 		wg.Done()
 	}()
@@ -321,28 +339,28 @@ func syncCodebase(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Println("Successfully synchronized codebase")
+	_, _ = fmt.Fprintln(app.writer, "Successfully synchronized codebase")
 
 	return nil
 }
 
-func pwdCodebase(c *cli.Context) error {
-	cb, err := openCodebase()
+func (app *app) pwd(c *cli.Context) error {
+	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("/%s\n", cb.LocalPath())
+	_, _ = fmt.Fprintf(app.writer, "/%s\n", cb.LocalPath())
 
 	return nil
 }
 
-func runCodebase(c *cli.Context) error {
+func (app *app) runCmd(c *cli.Context) error {
 	if !c.Args().Present() {
-		return fmt.Errorf("correct usage: srcode run <command>")
+		return errWrongRunUsage
 	}
 
-	cb, err := openCodebase()
+	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
@@ -352,13 +370,13 @@ func runCodebase(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("%s\n", res)
+	_, _ = fmt.Fprintf(app.writer, "%s\n", res)
 
 	return nil
 }
 
-func lsCodebase(c *cli.Context) error {
-	cb, err := openCodebase()
+func (app *app) lsProjects(c *cli.Context) error {
+	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
@@ -369,7 +387,8 @@ func lsCodebase(c *cli.Context) error {
 	}
 
 	if len(projects) == 0 {
-		fmt.Println("No projects found")
+		_, _ = fmt.Fprintln(app.writer, "No projects found")
+		return nil
 	}
 
 	// Sort keys to have re-producible output
@@ -379,7 +398,7 @@ func lsCodebase(c *cli.Context) error {
 	}
 	sort.Strings(keys)
 
-	table := tablewriter.NewWriter(os.Stdout)
+	table := tablewriter.NewWriter(app.writer)
 	table.SetHeader([]string{"Remote", "Path"})
 	table.SetBorder(false)
 
@@ -393,8 +412,12 @@ func lsCodebase(c *cli.Context) error {
 	return nil
 }
 
-func bulkGitCodebase(c *cli.Context) error {
-	cb, err := openCodebase()
+func (app *app) bulkGit(c *cli.Context) error {
+	if c.NArg() < 1 {
+		return errWrongBulkGitUsage
+	}
+
+	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
@@ -402,10 +425,10 @@ func bulkGitCodebase(c *cli.Context) error {
 	wg := sync.WaitGroup{}
 
 	ch := make(chan string)
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		for out := range ch {
-			fmt.Printf("%s\n\n", out)
+			_, _ = fmt.Fprintf(app.writer, "%s\n\n", out)
 		}
 		wg.Done()
 	}()
@@ -421,12 +444,12 @@ func bulkGitCodebase(c *cli.Context) error {
 	return nil
 }
 
-func setCmdCodebase(c *cli.Context) error {
+func (app *app) setCmd(c *cli.Context) error {
 	if c.NArg() < 2 {
-		return fmt.Errorf("correct usage: srcode set-cmd <name> <command>")
+		return errWrongSetCmdUsage
 	}
 
-	cb, err := openCodebase()
+	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
@@ -434,12 +457,12 @@ func setCmdCodebase(c *cli.Context) error {
 	return cb.SetCommand(c.Args().First(), strings.Join(c.Args().Tail(), " "), c.Bool("global"))
 }
 
-func mvCodebase(c *cli.Context) error {
+func (app *app) mvProject(c *cli.Context) error {
 	if c.NArg() < 2 {
-		return fmt.Errorf("correct usage: srcode mv <src> <dst>")
+		return errWrongMvUsage
 	}
 
-	cb, err := openCodebase()
+	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
@@ -448,7 +471,7 @@ func mvCodebase(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Successfully moved from %s to %s\n", c.Args().First(), c.Args().Get(1))
+	_, _ = fmt.Fprintf(app.writer, "Successfully moved from %s to %s\n", c.Args().First(), c.Args().Get(1))
 
 	return nil
 }
@@ -466,13 +489,13 @@ func parseGitConfig(args []string) map[string]string {
 	return config
 }
 
-func openCodebase() (codebase.Codebase, error) {
+func (app *app) openCodebase() (codebase.Codebase, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
 
-	cb, err := codebase.DefaultProvider.Open(cwd)
+	cb, err := app.codebaseProvider.Open(cwd)
 	if err != nil {
 		return nil, err
 	}
