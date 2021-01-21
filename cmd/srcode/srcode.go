@@ -6,6 +6,7 @@ import (
 	"github.com/creekorful/srcode/internal/codebase"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -30,6 +31,7 @@ var (
 func main() {
 	app := app{
 		codebaseProvider: codebase.DefaultProvider,
+		writer:           os.Stdout,
 	}
 
 	if err := app.getCliApp().Run(os.Args); err != nil {
@@ -40,6 +42,7 @@ func main() {
 
 type app struct {
 	codebaseProvider codebase.Provider
+	writer           io.Writer
 }
 
 func (app *app) getCliApp() *cli.App {
@@ -229,7 +232,7 @@ func (app *app) initCodebase(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Successfully initialized new codebase at: %s\n", path)
+	_, _ = fmt.Fprintf(app.writer, "Successfully initialized new codebase at: %s\n", path)
 
 	return nil
 }
@@ -257,7 +260,7 @@ func (app *app) cloneCodebase(c *cli.Context) error {
 	wg.Add(1)
 	go func() {
 		for entry := range ch {
-			fmt.Printf("Cloned %s -> /%s\n", entry.Project.Remote, entry.Path)
+			_, _ = fmt.Fprintf(app.writer, "Cloned %s -> /%s\n", entry.Project.Remote, entry.Path)
 		}
 		wg.Done()
 	}()
@@ -270,7 +273,7 @@ func (app *app) cloneCodebase(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Successfully cloned codebase from %s to: %s\n", c.Args().First(), path)
+	_, _ = fmt.Fprintf(app.writer, "Successfully cloned codebase from %s to: %s\n", c.Args().First(), path)
 
 	return nil
 }
@@ -297,7 +300,7 @@ func (app *app) addProject(c *cli.Context) error {
 	// little display trick
 	path = "/" + path
 
-	fmt.Printf("Successfully added %s to: %s\n", c.Args().First(), path)
+	_, _ = fmt.Fprintf(app.writer, "Successfully added %s to: %s\n", c.Args().First(), path)
 
 	return nil
 }
@@ -314,7 +317,7 @@ func (app *app) syncCodebase(c *cli.Context) error {
 	wg.Add(1)
 	go func() {
 		for entry := range addedChan {
-			fmt.Printf("[+] %s -> %s\n", entry.Project.Remote, entry.Path)
+			_, _ = fmt.Fprintf(app.writer, "[+] %s -> %s\n", entry.Project.Remote, entry.Path)
 		}
 		wg.Done()
 	}()
@@ -323,7 +326,7 @@ func (app *app) syncCodebase(c *cli.Context) error {
 	wg.Add(1)
 	go func() {
 		for entry := range deletedChan {
-			fmt.Printf("[-] %s -> %s\n", entry.Project.Remote, entry.Path)
+			_, _ = fmt.Fprintf(app.writer, "[-] %s -> %s\n", entry.Project.Remote, entry.Path)
 		}
 		wg.Done()
 	}()
@@ -336,7 +339,7 @@ func (app *app) syncCodebase(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Println("Successfully synchronized codebase")
+	_, _ = fmt.Fprintln(app.writer, "Successfully synchronized codebase")
 
 	return nil
 }
@@ -347,7 +350,7 @@ func (app *app) pwd(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("/%s\n", cb.LocalPath())
+	_, _ = fmt.Fprintf(app.writer, "/%s\n", cb.LocalPath())
 
 	return nil
 }
@@ -367,7 +370,7 @@ func (app *app) runCmd(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("%s\n", res)
+	_, _ = fmt.Fprintf(app.writer, "%s\n", res)
 
 	return nil
 }
@@ -384,7 +387,8 @@ func (app *app) lsProjects(c *cli.Context) error {
 	}
 
 	if len(projects) == 0 {
-		fmt.Println("No projects found")
+		_, _ = fmt.Fprintln(app.writer, "No projects found")
+		return nil
 	}
 
 	// Sort keys to have re-producible output
@@ -394,7 +398,7 @@ func (app *app) lsProjects(c *cli.Context) error {
 	}
 	sort.Strings(keys)
 
-	table := tablewriter.NewWriter(os.Stdout)
+	table := tablewriter.NewWriter(app.writer)
 	table.SetHeader([]string{"Remote", "Path"})
 	table.SetBorder(false)
 
@@ -424,7 +428,7 @@ func (app *app) bulkGit(c *cli.Context) error {
 	wg.Add(1)
 	go func() {
 		for out := range ch {
-			fmt.Printf("%s\n\n", out)
+			_, _ = fmt.Fprintf(app.writer, "%s\n\n", out)
 		}
 		wg.Done()
 	}()
@@ -467,7 +471,7 @@ func (app *app) mvProject(c *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Successfully moved from %s to %s\n", c.Args().First(), c.Args().Get(1))
+	_, _ = fmt.Fprintf(app.writer, "Successfully moved from %s to %s\n", c.Args().First(), c.Args().Get(1))
 
 	return nil
 }
