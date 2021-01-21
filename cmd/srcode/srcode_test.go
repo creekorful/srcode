@@ -5,6 +5,7 @@ import (
 	"github.com/creekorful/srcode/internal/codebase"
 	"github.com/creekorful/srcode/internal/codebase_mock"
 	"github.com/creekorful/srcode/internal/manifest"
+	"github.com/creekorful/srcode/internal/str"
 	"github.com/golang/mock/gomock"
 	"os"
 	"path/filepath"
@@ -61,7 +62,7 @@ func TestCloneCodebase(t *testing.T) {
 
 	codebaseProviderMock := codebase_mock.NewMockProvider(mockCtrl)
 
-	b := &strings.Builder{}
+	b := &str.Builder{}
 
 	app := app{
 		codebaseProvider: codebaseProviderMock,
@@ -204,7 +205,7 @@ func TestSyncCodebase(t *testing.T) {
 
 	codebaseProviderMock := codebase_mock.NewMockProvider(mockCtrl)
 
-	b := &strings.Builder{}
+	b := &str.Builder{}
 
 	app := app{
 		codebaseProvider: codebaseProviderMock,
