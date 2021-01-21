@@ -1,6 +1,6 @@
 package codebase
 
-//go:generate mockgen -destination=../codebase_mock/codebase_mock.go -package=codebase_mock . Codebase
+//go:generate mockgen -destination=../codebase_mock/codebase_mock.go -package=codebase_mock . Codebase,Provider
 
 import (
 	"errors"
