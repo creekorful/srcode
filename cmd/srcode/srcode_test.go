@@ -358,9 +358,11 @@ func TestLsProjects(t *testing.T) {
 
 	repo1 := repository_mock.NewMockRepository(mockCtrl)
 	repo1.EXPECT().Head().Return("develop", nil)
+	repo1.EXPECT().IsDirty().Return(false, nil)
 
 	repo2 := repository_mock.NewMockRepository(mockCtrl)
 	repo2.EXPECT().Head().Return("main", nil)
+	repo2.EXPECT().IsDirty().Return(true, nil)
 
 	codebaseMock.EXPECT().Projects().
 		Return(map[string]codebase.ProjectEntry{
@@ -395,6 +397,9 @@ func TestLsProjects(t *testing.T) {
 		t.Fail()
 	}
 	if !strings.Contains(val, "main") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "(*)") {
 		t.Fail()
 	}
 }

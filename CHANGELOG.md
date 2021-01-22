@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Changed
 
 - cmd/ls: Display git branch.
+- cmd/ls: Display git status (dirty, clean)
 
 ## [0.4.0] -  2021-01-22
 

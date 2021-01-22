@@ -17,6 +17,7 @@ type Repository interface {
 	SetConfig(key, value string) error
 	RawCmd(args []string) (string, error)
 	Head() (string, error)
+	IsDirty() (bool, error)
 }
 
 type gitWrapperRepository struct {
@@ -65,6 +66,15 @@ func (gwr *gitWrapperRepository) RawCmd(args []string) (string, error) {
 
 func (gwr *gitWrapperRepository) Head() (string, error) {
 	return gwr.execWithOutput("rev-parse", "--abbrev-ref", "HEAD")
+}
+
+func (gwr *gitWrapperRepository) IsDirty() (bool, error) {
+	res, err := gwr.execWithOutput("status", "--short")
+	if err != nil {
+		return false, err
+	}
+
+	return res != "", nil
 }
 
 func (gwr *gitWrapperRepository) execWithOutput(args ...string) (string, error) {

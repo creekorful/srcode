@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/creekorful/srcode/internal/codebase"
+	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 	"io"
@@ -408,6 +409,7 @@ func (app *app) lsProjects(c *cli.Context) error {
 	table.SetColumnAlignment([]int{tablewriter.ALIGN_LEFT, tablewriter.ALIGN_LEFT, tablewriter.ALIGN_CENTER})
 	table.SetBorder(false)
 
+	dirt := color.New(color.Italic, color.FgHiYellow)
 	for _, path := range keys {
 		project := projects[path]
 
@@ -416,7 +418,16 @@ func (app *app) lsProjects(c *cli.Context) error {
 			return err
 		}
 
-		table.Append([]string{project.Project.Remote, "/"+path, branch})
+		dirty, err := project.Repository.IsDirty()
+		if err != nil {
+			return err
+		}
+
+		if dirty {
+			table.Append([]string{project.Project.Remote, "/" + path, dirt.Sprint(branch + "(*)")})
+		} else {
+			table.Append([]string{project.Project.Remote, "/" + path, branch})
+		}
 	}
 
 	table.Render()
