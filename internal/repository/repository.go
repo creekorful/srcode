@@ -5,7 +5,7 @@ import (
 	"os/exec"
 )
 
-//go:generate mockgen -destination=../repository_mock/repository_mock.go -package=repository_mock . Repository
+//go:generate mockgen -destination=../repository_mock/repository_mock.go -package=repository_mock . Repository,Provider
 
 // Repository represent a git repository
 type Repository interface {
@@ -16,6 +16,7 @@ type Repository interface {
 	Config(key string) (string, error)
 	SetConfig(key, value string) error
 	RawCmd(args []string) (string, error)
+	Head() (string, error)
 }
 
 type gitWrapperRepository struct {
@@ -60,6 +61,10 @@ func (gwr *gitWrapperRepository) SetConfig(key, value string) error {
 
 func (gwr *gitWrapperRepository) RawCmd(args []string) (string, error) {
 	return gwr.execWithOutput(args...)
+}
+
+func (gwr *gitWrapperRepository) Head() (string, error) {
+	return gwr.execWithOutput("rev-parse", "--abbrev-ref", "HEAD")
 }
 
 func (gwr *gitWrapperRepository) execWithOutput(args ...string) (string, error) {

@@ -404,12 +404,19 @@ func (app *app) lsProjects(c *cli.Context) error {
 	sort.Strings(keys)
 
 	table := tablewriter.NewWriter(app.writer)
-	table.SetHeader([]string{"Remote", "Path"})
+	table.SetHeader([]string{"Remote", "Path", "Branch"})
+	table.SetColumnAlignment([]int{tablewriter.ALIGN_LEFT, tablewriter.ALIGN_LEFT, tablewriter.ALIGN_CENTER})
 	table.SetBorder(false)
 
 	for _, path := range keys {
 		project := projects[path]
-		table.Append([]string{project.Remote, path})
+
+		branch, err := project.Repository.Head()
+		if err != nil {
+			return err
+		}
+
+		table.Append([]string{project.Project.Remote, "/"+path, branch})
 	}
 
 	table.Render()

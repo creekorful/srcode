@@ -25,9 +25,17 @@ var (
 	ErrCommandNotFound = errors.New("no command with the name found")
 )
 
+// ProjectEntry map a codebase project entry (i.e the project alongside his codebase local path)
+// and optionally the linked Git repository
+type ProjectEntry struct {
+	Path       string
+	Project    manifest.Project
+	Repository repository.Repository
+}
+
 // Codebase is a collection of projects
 type Codebase interface {
-	Projects() (map[string]manifest.Project, error)
+	Projects() (map[string]ProjectEntry, error)
 	Add(remote, path string, config map[string]string) (manifest.Project, error)
 	Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error
 	LocalPath() string
@@ -54,13 +62,28 @@ type codebase struct {
 	manProvider manifest.Provider
 }
 
-func (codebase *codebase) Projects() (map[string]manifest.Project, error) {
+func (codebase *codebase) Projects() (map[string]ProjectEntry, error) {
 	man, err := codebase.readManifest()
 	if err != nil {
 		return nil, err
 	}
 
-	return man.Projects, nil
+	entries := map[string]ProjectEntry{}
+
+	for path, project := range man.Projects {
+		repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, path))
+		if err != nil {
+			return nil, err
+		}
+
+		entries[path] = ProjectEntry{
+			Path:       path,
+			Project:    project,
+			Repository: repo,
+		}
+	}
+
+	return entries, nil
 }
 
 func (codebase *codebase) Add(remote, path string, config map[string]string) (manifest.Project, error) {

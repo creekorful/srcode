@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Changed
+
+- cmd/ls: Display git branch.
+
 ## [0.4.0] -  2021-01-22
 
 ## Added
@@ -20,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Fixed
 
-- bulk-git: fails if no args provided.
+- cmd/bulk-git: fails if no args provided.
 
 ## [0.3.0] -  2021-01-18
 

@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -31,18 +30,27 @@ func TestCodebase_Projects(t *testing.T) {
 			Projects: expectedProjects,
 		}, nil)
 
+	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+
 	codebase := &codebase{
-		manProvider: manProviderMock,
-		rootPath:    "test-dir",
+		manProvider:  manProviderMock,
+		repoProvider: repoProviderMock,
+		rootPath:     "test-dir",
 	}
+
+	repoProviderMock.EXPECT().Open(filepath.Join("test-dir", "test", "15"))
 
 	projects, err := codebase.Projects()
 	if err != nil {
 		t.FailNow()
 	}
 
-	if !reflect.DeepEqual(projects, expectedProjects) {
-		t.FailNow()
+	entry, exist := projects["test/15"]
+	if !exist {
+		t.Fail()
+	}
+	if entry.Project.Remote != "test" {
+		t.Fail()
 	}
 }
 
