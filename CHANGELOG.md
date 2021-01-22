@@ -21,9 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Fixed
 
 - bulk-git: fails if no args provided.
-- bulk-git: fix race condition.
-- clone: fix race condition.
-- sync: fix race condition.
 
 ## [0.3.0] -  2021-01-18
 
