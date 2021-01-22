@@ -409,7 +409,7 @@ func (app *app) lsProjects(c *cli.Context) error {
 	table.SetColumnAlignment([]int{tablewriter.ALIGN_LEFT, tablewriter.ALIGN_LEFT, tablewriter.ALIGN_CENTER})
 	table.SetBorder(false)
 
-	dirt := color.New(color.Italic, color.FgHiYellow)
+	dirtStyle := color.New(color.Italic, color.FgHiYellow)
 	for _, path := range keys {
 		project := projects[path]
 
@@ -423,11 +423,14 @@ func (app *app) lsProjects(c *cli.Context) error {
 			return err
 		}
 
+		values := []string{project.Project.Remote, "/" + path}
 		if dirty {
-			table.Append([]string{project.Project.Remote, "/" + path, dirt.Sprint(branch + "(*)")})
+			values = append(values, dirtStyle.Sprint(branch + "(*)"))
 		} else {
-			table.Append([]string{project.Project.Remote, "/" + path, branch})
+			values = append(values, branch)
 		}
+
+		table.Append(values)
 	}
 
 	table.Render()
