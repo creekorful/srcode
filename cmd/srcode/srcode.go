@@ -371,14 +371,7 @@ func (app *app) runCmd(c *cli.Context) error {
 		return err
 	}
 
-	res, err := cb.Run(c.Args().First())
-	if err != nil {
-		return err
-	}
-
-	_, _ = fmt.Fprintf(app.writer, "%s\n", res)
-
-	return nil
+	return cb.Run(c.Args().First(), app.writer)
 }
 
 func (app *app) lsProjects(c *cli.Context) error {
@@ -425,7 +418,7 @@ func (app *app) lsProjects(c *cli.Context) error {
 
 		values := []string{project.Project.Remote, "/" + path}
 		if dirty {
-			values = append(values, dirtStyle.Sprint(branch + "(*)"))
+			values = append(values, dirtStyle.Sprint(branch+"(*)"))
 		} else {
 			values = append(values, branch)
 		}

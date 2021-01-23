@@ -8,6 +8,7 @@ import (
 	"github.com/creekorful/srcode/internal/repository_mock"
 	"github.com/creekorful/srcode/internal/str"
 	"github.com/golang/mock/gomock"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -325,7 +326,9 @@ func TestRunCmd(t *testing.T) {
 	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 
-	codebaseMock.EXPECT().Run("test").Return("test 42", nil)
+	codebaseMock.EXPECT().Run("test", b).
+		Do(func(command string, writer io.Writer) { _, _ = io.WriteString(writer, "test 42\n") }).
+		Return(nil)
 
 	if err := app.getCliApp().Run([]string{"srcode", "run", "test"}); err != nil {
 		t.Fail()
