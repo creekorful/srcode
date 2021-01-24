@@ -5,10 +5,10 @@ package codebase
 import (
 	"errors"
 	"fmt"
-	"github.com/creekorful/srcode/internal/cmd"
 	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/creekorful/srcode/internal/repository"
 	"golang.org/x/sync/errgroup"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -25,13 +25,21 @@ var (
 	ErrCommandNotFound = errors.New("no command with the name found")
 )
 
+// ProjectEntry map a codebase project entry (i.e the project alongside his codebase local path)
+// and optionally the linked Git repository
+type ProjectEntry struct {
+	Path       string
+	Project    manifest.Project
+	Repository repository.Repository
+}
+
 // Codebase is a collection of projects
 type Codebase interface {
-	Projects() (map[string]manifest.Project, error)
+	Projects() (map[string]ProjectEntry, error)
 	Add(remote, path string, config map[string]string) (manifest.Project, error)
 	Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error
 	LocalPath() string
-	Run(command string) (string, error)
+	Run(command string, writer io.Writer) error
 	BulkGIT(args []string, out chan<- string) error
 	SetCommand(name, command string, global bool) error
 	MoveProject(oldPath, newPath string) error
@@ -54,13 +62,28 @@ type codebase struct {
 	manProvider manifest.Provider
 }
 
-func (codebase *codebase) Projects() (map[string]manifest.Project, error) {
+func (codebase *codebase) Projects() (map[string]ProjectEntry, error) {
 	man, err := codebase.readManifest()
 	if err != nil {
 		return nil, err
 	}
 
-	return man.Projects, nil
+	entries := map[string]ProjectEntry{}
+
+	for path, project := range man.Projects {
+		repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, path))
+		if err != nil {
+			return nil, err
+		}
+
+		entries[path] = ProjectEntry{
+			Path:       path,
+			Project:    project,
+			Repository: repo,
+		}
+	}
+
+	return entries, nil
 }
 
 func (codebase *codebase) Add(remote, path string, config map[string]string) (manifest.Project, error) {
@@ -235,36 +258,41 @@ func (codebase *codebase) LocalPath() string {
 	return codebase.localPath
 }
 
-func (codebase *codebase) Run(command string) (string, error) {
+func (codebase *codebase) Run(command string, writer io.Writer) error {
 	// Retrieve manifest
 	man, err := codebase.readManifest()
 	if err != nil {
-		return "", err
+		return err
 	}
 
 	// Fails if we are not in a project directory
 	project, exist := man.Projects[codebase.localPath]
 	if !exist {
-		return "", ErrNoProjectFound
+		return ErrNoProjectFound
 	}
 
 	// Check if command is defined locally
 	cmdStr, exist := project.Commands[command]
 	if !exist {
-		return "", fmt.Errorf("error while running command %s: %w", command, ErrCommandNotFound)
+		return fmt.Errorf("error while running command %s: %w", command, ErrCommandNotFound)
 	}
 
 	// It's a global alias
 	if strings.HasPrefix(cmdStr, "@") {
 		cmdStr, exist = man.Commands[strings.TrimPrefix(cmdStr, "@")]
 		if !exist {
-			return "", fmt.Errorf("error while running command %s: %w", command, ErrCommandNotFound)
+			return fmt.Errorf("error while running command %s: %w", command, ErrCommandNotFound)
 		}
 	}
 
 	// Finally execute the command
 	parts := strings.Split(cmdStr, " ")
-	return cmd.ExecWithOutput(exec.Command(parts[0], parts[1:]...))
+
+	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd.Stdout = writer
+	cmd.Stderr = writer
+
+	return cmd.Run()
 }
 
 func (codebase *codebase) BulkGIT(args []string, out chan<- string) error {

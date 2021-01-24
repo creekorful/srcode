@@ -5,8 +5,10 @@ import (
 	"github.com/creekorful/srcode/internal/codebase"
 	"github.com/creekorful/srcode/internal/codebase_mock"
 	"github.com/creekorful/srcode/internal/manifest"
+	"github.com/creekorful/srcode/internal/repository_mock"
 	"github.com/creekorful/srcode/internal/str"
 	"github.com/golang/mock/gomock"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -324,7 +326,9 @@ func TestRunCmd(t *testing.T) {
 	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 
-	codebaseMock.EXPECT().Run("test").Return("test 42", nil)
+	codebaseMock.EXPECT().Run("test", b).
+		Do(func(command string, writer io.Writer) { _, _ = io.WriteString(writer, "test 42\n") }).
+		Return(nil)
 
 	if err := app.getCliApp().Run([]string{"srcode", "run", "test"}); err != nil {
 		t.Fail()
@@ -355,10 +359,24 @@ func TestLsProjects(t *testing.T) {
 	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 
+	repo1 := repository_mock.NewMockRepository(mockCtrl)
+	repo1.EXPECT().Head().Return("develop", nil)
+	repo1.EXPECT().IsDirty().Return(false, nil)
+
+	repo2 := repository_mock.NewMockRepository(mockCtrl)
+	repo2.EXPECT().Head().Return("main", nil)
+	repo2.EXPECT().IsDirty().Return(true, nil)
+
 	codebaseMock.EXPECT().Projects().
-		Return(map[string]manifest.Project{
-			"Contributing/test": {Remote: "https://example/test.git"},
-			"Another/Stuff":     {Remote: "https://old.example/stuff.git"},
+		Return(map[string]codebase.ProjectEntry{
+			"Contributing/test": {
+				Project:    manifest.Project{Remote: "https://example/test.git"},
+				Repository: repo1,
+			},
+			"Another/Stuff": {
+				Project:    manifest.Project{Remote: "https://old.example/stuff.git"},
+				Repository: repo2,
+			},
 		}, nil)
 
 	if err := app.getCliApp().Run([]string{"srcode", "ls"}); err != nil {
@@ -372,10 +390,19 @@ func TestLsProjects(t *testing.T) {
 	if !strings.Contains(val, "https://example/test.git") {
 		t.Fail()
 	}
+	if !strings.Contains(val, "develop") {
+		t.Fail()
+	}
 	if !strings.Contains(val, "Another/Stuff") {
 		t.Fail()
 	}
 	if !strings.Contains(val, "https://old.example/stuff.git") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "main") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "(*)") {
 		t.Fail()
 	}
 }

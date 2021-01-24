@@ -10,7 +10,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -31,18 +30,27 @@ func TestCodebase_Projects(t *testing.T) {
 			Projects: expectedProjects,
 		}, nil)
 
+	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+
 	codebase := &codebase{
-		manProvider: manProviderMock,
-		rootPath:    "test-dir",
+		manProvider:  manProviderMock,
+		repoProvider: repoProviderMock,
+		rootPath:     "test-dir",
 	}
+
+	repoProviderMock.EXPECT().Open(filepath.Join("test-dir", "test", "15"))
 
 	projects, err := codebase.Projects()
 	if err != nil {
 		t.FailNow()
 	}
 
-	if !reflect.DeepEqual(projects, expectedProjects) {
-		t.FailNow()
+	entry, exist := projects["test/15"]
+	if !exist {
+		t.Fail()
+	}
+	if entry.Project.Remote != "test" {
+		t.Fail()
 	}
 }
 
@@ -381,6 +389,8 @@ func TestCodebase_Run(t *testing.T) {
 		localPath:   "",
 	}
 
+	b := &strings.Builder{}
+
 	manProviderMock.EXPECT().
 		Read(filepath.Join("test-dir", metaDir, manifestFile)).
 		Times(5).
@@ -400,7 +410,7 @@ func TestCodebase_Run(t *testing.T) {
 		}, nil)
 
 	// Try to run command from a non-project directory
-	if _, err := codebase.Run("greet-local"); !errors.Is(err, ErrNoProjectFound) {
+	if err := codebase.Run("greet-local", b); !errors.Is(err, ErrNoProjectFound) {
 		t.Fail()
 	}
 
@@ -408,23 +418,27 @@ func TestCodebase_Run(t *testing.T) {
 	codebase.localPath = "test/something"
 
 	// Try to run an non existing local command
-	if _, err := codebase.Run("blah"); !errors.Is(err, ErrCommandNotFound) {
+	if err := codebase.Run("blah", b); !errors.Is(err, ErrCommandNotFound) {
 		t.Fail()
 	}
 
 	// Try to run an non existing global command
-	if _, err := codebase.Run("invalid-global"); !errors.Is(err, ErrCommandNotFound) {
+	if err := codebase.Run("invalid-global", b); !errors.Is(err, ErrCommandNotFound) {
 		t.Fail()
 	}
 
 	// Try to run a local command
-	if res, err := codebase.Run("greet-local"); err != nil || res != "Hello from local command" {
-		t.Fail()
+	b.Reset()
+	if err := codebase.Run("greet-local", b); err != nil || b.String() != "Hello from local command\n" {
+		t.Errorf("error: %v", err)
+		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from local command")
 	}
 
 	// Try to run a global command
-	if res, err := codebase.Run("greet-global"); err != nil || res != "Hello from global command" {
-		t.Fail()
+	b.Reset()
+	if err := codebase.Run("greet-global", b); err != nil || b.String() != "Hello from global command\n" {
+		t.Errorf("error: %v", err)
+		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from global command")
 	}
 }
 

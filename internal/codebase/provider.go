@@ -32,12 +32,6 @@ const (
 	manifestFile = "manifest.json"
 )
 
-// ProjectEntry map a codebase project entry (i.e the project alongside his codebase local path)
-type ProjectEntry struct {
-	Path    string
-	Project manifest.Project
-}
-
 // Provider is something that allows to Init, Open, or Clone a Codebase
 type Provider interface {
 	Init(path, remote string) (Codebase, error)
@@ -179,14 +173,14 @@ func (provider *provider) Clone(url, path string, ch chan<- ProjectEntry) (Codeb
 		manProvider:  provider.manifestProvider,
 	}
 
-	projects, err := codebase.Projects()
+	man, err := codebase.readManifest()
 	if err != nil {
 		return nil, err
 	}
 
 	// Clone back project & configure them if needed
 	g := errgroup.Group{}
-	for projectPath, project := range projects {
+	for projectPath, project := range man.Projects {
 		projectPath := projectPath
 		project := project
 

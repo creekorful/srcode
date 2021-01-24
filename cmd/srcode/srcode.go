@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/creekorful/srcode/internal/codebase"
+	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 	"io"
@@ -75,7 +76,7 @@ This command creates an empty codebase - basically a .srcode directory with mani
 Examples
 
 - Initialize a codebase with specific remote:
-  srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
+  $ srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "clone",
@@ -88,7 +89,7 @@ Clones a codebase into a newly created directory, and install (clone) the existi
 Examples
 
 - Clone a codebase into specific directory:
-  srcode clone git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
+  $ srcode clone git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "add",
@@ -107,7 +108,7 @@ Add a project (git repository) to the current codebase.
 Examples
 
 - Add a project with custom git configuration:
-  srcode add --git-config user.email=alois@micard.lu --git-config commit.gpgsign=true git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe`,
+  $ srcode add --git-config user.email=alois@micard.lu --git-config commit.gpgsign=true git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe`,
 			},
 			{
 				Name:   "sync",
@@ -121,7 +122,12 @@ Examples
 				},
 				Description: `
 Synchronize the codebase with the linked remote - i.e install & configure new project and remove removed ones,
-while pushing the changes.`,
+while pushing the changes.
+
+Examples
+
+- Synchronize with remote and delete removed projects:
+  $ srcode sync --delete-removed`,
 			},
 			{
 				Name:   "pwd",
@@ -141,8 +147,8 @@ Run a command inside a codebase project.
 Examples
 
 - Execute a command named lint:
-  srcode run lint
-  srcode lint`,
+  $ srcode run lint
+  $ srcode lint`,
 			},
 			{
 				Name:   "ls",
@@ -162,7 +168,7 @@ Execute a git command in bulk (over all codebase projects).
 Examples
 
 - Update all repositories to their latest changes:
-  srcode bulk-git pull --rebase`,
+  $ srcode bulk-git pull --rebase`,
 			},
 			{
 				Name:      "set-cmd",
@@ -182,10 +188,10 @@ at project level.
 Examples
 
 - Create a global go-test command:
-  srcode set-cmd --global go-test go test -v ./...
+  $ srcode set-cmd --global go-test go test -v ./...
 
 - Link a project local test command to the previously defined global alias:
-  srcode set-cmd test @go-test
+  $ srcode set-cmd test @go-test
 
 Now you can use 'srcode run test' or 'srcode test' to execute the command
 from project directory.`,
@@ -202,7 +208,7 @@ as well as update the manifest to reflect the changes.
 Examples
 
 - Move project from Personal/super-project to OldStuff/super-project-42:
-  srcode mv Personal/super-project OldStuff/super-project-42`,
+  $ srcode mv Personal/super-project OldStuff/super-project-42`,
 			},
 		},
 		Authors: []*cli.Author{{
@@ -365,14 +371,7 @@ func (app *app) runCmd(c *cli.Context) error {
 		return err
 	}
 
-	res, err := cb.Run(c.Args().First())
-	if err != nil {
-		return err
-	}
-
-	_, _ = fmt.Fprintf(app.writer, "%s\n", res)
-
-	return nil
+	return cb.Run(c.Args().First(), app.writer)
 }
 
 func (app *app) lsProjects(c *cli.Context) error {
@@ -399,12 +398,32 @@ func (app *app) lsProjects(c *cli.Context) error {
 	sort.Strings(keys)
 
 	table := tablewriter.NewWriter(app.writer)
-	table.SetHeader([]string{"Remote", "Path"})
+	table.SetHeader([]string{"Remote", "Path", "Branch"})
+	table.SetColumnAlignment([]int{tablewriter.ALIGN_LEFT, tablewriter.ALIGN_LEFT, tablewriter.ALIGN_CENTER})
 	table.SetBorder(false)
 
+	dirtStyle := color.New(color.Italic, color.FgHiYellow)
 	for _, path := range keys {
 		project := projects[path]
-		table.Append([]string{project.Remote, path})
+
+		branch, err := project.Repository.Head()
+		if err != nil {
+			return err
+		}
+
+		dirty, err := project.Repository.IsDirty()
+		if err != nil {
+			return err
+		}
+
+		values := []string{project.Project.Remote, "/" + path}
+		if dirty {
+			values = append(values, dirtStyle.Sprint(branch+"(*)"))
+		} else {
+			values = append(values, branch)
+		}
+
+		table.Append(values)
 	}
 
 	table.Render()

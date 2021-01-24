@@ -6,8 +6,6 @@ import (
 	"os/exec"
 )
 
-//go:generate mockgen -destination=../repository_mock/provider_mock.go -package=repository_mock . Provider
-
 // DefaultProvider is the default Git provider
 var DefaultProvider = &gitWrapperProvider{}
 
