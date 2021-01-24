@@ -43,6 +43,7 @@ type Codebase interface {
 	BulkGIT(args []string, out chan<- string) error
 	SetCommand(name, command string, global bool) error
 	MoveProject(oldPath, newPath string) error
+	RmProject(path string, delete bool) error
 }
 
 type codebase struct {
@@ -428,6 +429,37 @@ func (codebase *codebase) MoveProject(oldPath, newPath string) error {
 	}
 
 	return nil
+}
+
+func (codebase *codebase) RmProject(path string, shouldDelete bool) error {
+	man, err := codebase.readManifest()
+	if err != nil {
+		return err
+	}
+
+	path = filepath.Join(codebase.localPath, path)
+
+	if _, exist := man.Projects[path]; !exist {
+		return ErrNoProjectFound
+	}
+
+	delete(man.Projects, path)
+
+	if err := codebase.writeManifest(man); err != nil {
+		return err
+	}
+
+	if err := codebase.repo.CommitFiles(fmt.Sprintf("Remove %s", path), manifestFile); err != nil {
+		return err
+	}
+
+	if shouldDelete {
+		if err := os.RemoveAll(filepath.Join(codebase.rootPath, path)); err != nil {
+			return err
+		}
+	}
+
+	return nil // TODO
 }
 
 func (codebase *codebase) readManifest() (manifest.Manifest, error) {
