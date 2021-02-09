@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Added
 
 - [#15](https://github.com/creekorful/srcode/issues/15): Implement rm.
+- [#4](https://github.com/creekorful/srcode/issues/4): Add --import to init.
 
 ## [0.5.0] - 2021-01-24
 

@@ -13,6 +13,7 @@ type Repository interface {
 	Push(repo, refspec string) error
 	Pull(repo, refspec string) error
 	AddRemote(name, url string) error
+	Remote(name string) (string, error)
 	Config(key string) (string, error)
 	SetConfig(key, value string) error
 	RawCmd(args []string) (string, error)
@@ -49,6 +50,10 @@ func (gwr *gitWrapperRepository) Pull(repo, refspec string) error {
 func (gwr *gitWrapperRepository) AddRemote(name, url string) error {
 	_, err := gwr.execWithOutput("remote", "add", name, url)
 	return err
+}
+
+func (gwr *gitWrapperRepository) Remote(name string) (string, error) {
+	return gwr.execWithOutput("remote", "get-url", name)
 }
 
 func (gwr *gitWrapperRepository) Config(key string) (string, error) {

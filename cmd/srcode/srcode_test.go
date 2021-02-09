@@ -20,6 +20,7 @@ func TestInitCodebase(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	codebaseProviderMock := codebase_mock.NewMockProvider(mockCtrl)
+	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
 
 	b := &strings.Builder{}
 
@@ -39,7 +40,11 @@ func TestInitCodebase(t *testing.T) {
 	}
 
 	// test init relative path
-	codebaseProviderMock.EXPECT().Init(filepath.Join(cwd, "code"), "")
+
+	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{}, nil)
+
+	codebaseProviderMock.EXPECT().Init(filepath.Join(cwd, "code"), "", false).
+		Return(codebaseMock, nil)
 	if err := app.getCliApp().Run([]string{"srcode", "init", "code"}); err != nil {
 		t.Fail()
 	}
@@ -49,11 +54,27 @@ func TestInitCodebase(t *testing.T) {
 
 	// test init full path
 	b.Reset()
-	codebaseProviderMock.EXPECT().Init(filepath.Join("/", "etc", "code"), "git@github.com:test.git")
-	if err := app.getCliApp().Run([]string{"srcode", "init", "--remote", "git@github.com:test.git", "/etc/code"}); err != nil {
+
+	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{
+		"Contributing/Test": {Project: manifest.Project{Remote: "test.git"}},
+		"example":           {Project: manifest.Project{Remote: "example.git"}},
+	}, nil)
+
+	codebaseProviderMock.EXPECT().
+		Init(filepath.Join("/", "etc", "code"), "git@github.com:test.git", true).
+		Return(codebaseMock, nil)
+	if err := app.getCliApp().Run([]string{"srcode", "init", "--import", "--remote", "git@github.com:test.git", "/etc/code"}); err != nil {
 		t.Fail()
 	}
-	if b.String() != fmt.Sprintf("Successfully initialized new codebase at: %s\n", filepath.Join("/", "etc", "code")) {
+
+	val := b.String()
+	if !strings.Contains(val, fmt.Sprintf("Successfully initialized new codebase at: %s\n", filepath.Join("/", "etc", "code"))) {
+		t.Fail()
+	}
+	if !strings.Contains(val, fmt.Sprintf("Imported test.git -> /Contributing/Test")) {
+		t.Fail()
+	}
+	if !strings.Contains(val, fmt.Sprintf("Imported example.git -> /example")) {
 		t.Fail()
 	}
 }

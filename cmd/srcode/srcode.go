@@ -70,14 +70,22 @@ remotely.`,
 						Name:  "remote",
 						Usage: "The codebase remote",
 					},
+					&cli.BoolFlag{
+						Name:  "import",
+						Usage: "Import existing repositories located in codebase",
+					},
 				},
 				Description: `
 This command creates an empty codebase - basically a .srcode directory with manifest file to track the codebase projects.
+If invoked with --import, srcode will search for existing Git repositories and import them as codebase projects.
 
 Examples
 
 - Initialize a codebase with specific remote:
-  $ srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
+  $ srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory
+
+- Initialize a codebase with existing projects:
+  $ srcode init --import --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "clone",
@@ -255,11 +263,21 @@ func (app *app) initCodebase(c *cli.Context) error {
 		path = filepath.Join(cwd, path)
 	}
 
-	if _, err := app.codebaseProvider.Init(path, c.String("remote")); err != nil {
+	cb, err := app.codebaseProvider.Init(path, c.String("remote"), c.Bool("import"))
+	if err != nil {
 		return err
 	}
 
 	_, _ = fmt.Fprintf(app.writer, "Successfully initialized new codebase at: %s\n", path)
+
+	projects, err := cb.Projects()
+	if err != nil {
+		return err
+	}
+
+	for path, project := range projects {
+		_, _ = fmt.Fprintf(app.writer, "Imported %s -> /%s\n", project.Project.Remote, path)
+	}
 
 	return nil
 }

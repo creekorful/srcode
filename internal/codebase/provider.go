@@ -34,7 +34,7 @@ const (
 
 // Provider is something that allows to Init, Open, or Clone a Codebase
 type Provider interface {
-	Init(path, remote string) (Codebase, error)
+	Init(path, remote string, importRepositories bool) (Codebase, error)
 	Open(path string) (Codebase, error)
 	Clone(url, path string, ch chan<- ProjectEntry) (Codebase, error)
 }
@@ -44,7 +44,7 @@ type provider struct {
 	manifestProvider manifest.Provider
 }
 
-func (provider *provider) Init(path, remote string) (Codebase, error) {
+func (provider *provider) Init(path, remote string, importRepositories bool) (Codebase, error) {
 	exist, err := codebaseExists(path)
 	if err != nil {
 		return nil, err
@@ -64,8 +64,45 @@ func (provider *provider) Init(path, remote string) (Codebase, error) {
 		return nil, fmt.Errorf("error while creating codebase at %s: %w", path, err)
 	}
 
-	// create the meta file
-	b, err := json.Marshal(manifest.Manifest{})
+	man := manifest.Manifest{
+		Projects: map[string]manifest.Project{},
+	}
+
+	// lookup for existing git repositories and import them inside the codebase
+	if importRepositories {
+		if err := filepath.Walk(path, func(innerPath string, info os.FileInfo, err error) error {
+			if strings.Contains(innerPath, metaDir) {
+				return nil
+			}
+
+			if !provider.repoProvider.Exists(innerPath) {
+				return nil
+			}
+
+			repo, err := provider.repoProvider.Open(innerPath)
+			if err != nil {
+				return err
+			}
+
+			remote, err := repo.Remote("origin")
+			if err != nil {
+				return nil
+			}
+
+			man.Projects[strings.TrimPrefix(innerPath, path+"/")] = manifest.Project{
+				Remote:   remote,
+				Config:   nil,
+				Commands: nil,
+			}
+
+			return nil
+		}); err != nil {
+			return nil, nil
+		}
+	}
+
+	// create the manifest
+	b, err := json.Marshal(man)
 	if err != nil {
 		return nil, err
 	}
