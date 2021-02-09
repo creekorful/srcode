@@ -4,6 +4,7 @@ import (
 	"github.com/creekorful/srcode/internal/cmd"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 // DefaultProvider is the default Git provider
@@ -14,6 +15,7 @@ type Provider interface {
 	Init(path string) (Repository, error)
 	Open(path string) (Repository, error)
 	Clone(url, path string) (Repository, error)
+	Exists(path string) bool
 }
 
 type gitWrapperProvider struct {
@@ -45,4 +47,9 @@ func (gwp *gitWrapperProvider) Clone(url, path string) (Repository, error) {
 	}
 
 	return &gitWrapperRepository{path: path}, nil
+}
+
+func (gwp *gitWrapperProvider) Exists(path string) bool {
+	_, err := os.Stat(filepath.Join(path, ".git"))
+	return err == nil
 }

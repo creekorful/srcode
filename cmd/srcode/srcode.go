@@ -27,6 +27,7 @@ var (
 	errWrongBulkGitUsage    = errors.New("correct usage: srcode bulk-git <args>")
 	errWrongSetCmdUsage     = errors.New("correct usage: srcode set-cmd <name> <command>")
 	errWrongMvUsage         = errors.New("correct usage: srcode mv <src> <dst>")
+	errWrongRmUsage         = errors.New("correct usage: srcode rm <path>")
 )
 
 func main() {
@@ -69,14 +70,22 @@ remotely.`,
 						Name:  "remote",
 						Usage: "The codebase remote",
 					},
+					&cli.BoolFlag{
+						Name:  "import",
+						Usage: "Import existing repositories located in codebase",
+					},
 				},
 				Description: `
 This command creates an empty codebase - basically a .srcode directory with manifest file to track the codebase projects.
+If invoked with --import, srcode will search for existing Git repositories and import them as codebase projects.
 
 Examples
 
 - Initialize a codebase with specific remote:
-  $ srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
+  $ srcode init --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory
+
+- Initialize a codebase with existing projects:
+  $ srcode init --import --remote git@github.com:creekorful/dot-srcode.git /path/to/custom/directory`,
 			},
 			{
 				Name:      "clone",
@@ -210,6 +219,26 @@ Examples
 - Move project from Personal/super-project to OldStuff/super-project-42:
   $ srcode mv Personal/super-project OldStuff/super-project-42`,
 			},
+			{
+				Name:      "rm",
+				Usage:     "Remove a project",
+				Action:    app.rmProject,
+				ArgsUsage: "<path>",
+				Flags: []cli.Flag{
+					&cli.BoolFlag{
+						Name:  "delete",
+						Usage: "If true delete the project from disk",
+					},
+				},
+				Description: `
+Remove a codebase project. This will remove it from the manifest and
+optionally from the disk if --delete is provided.
+
+Examples
+
+- Remove a project located at Contributing/Test and remove from disk too:
+  $ srcode rm --delete Contributing/Test`,
+			},
 		},
 		Authors: []*cli.Author{{
 			Name:  "Aloïs Micard",
@@ -234,11 +263,21 @@ func (app *app) initCodebase(c *cli.Context) error {
 		path = filepath.Join(cwd, path)
 	}
 
-	if _, err := app.codebaseProvider.Init(path, c.String("remote")); err != nil {
+	cb, err := app.codebaseProvider.Init(path, c.String("remote"), c.Bool("import"))
+	if err != nil {
 		return err
 	}
 
 	_, _ = fmt.Fprintf(app.writer, "Successfully initialized new codebase at: %s\n", path)
+
+	projects, err := cb.Projects()
+	if err != nil {
+		return err
+	}
+
+	for path, project := range projects {
+		_, _ = fmt.Fprintf(app.writer, "Imported %s -> /%s\n", project.Project.Remote, path)
+	}
 
 	return nil
 }
@@ -493,6 +532,25 @@ func (app *app) mvProject(c *cli.Context) error {
 	_, _ = fmt.Fprintf(app.writer, "Successfully moved from %s to %s\n", c.Args().First(), c.Args().Get(1))
 
 	return nil
+}
+
+func (app *app) rmProject(c *cli.Context) error {
+	if c.NArg() != 1 {
+		return errWrongRmUsage
+	}
+
+	cb, err := app.openCodebase()
+	if err != nil {
+		return err
+	}
+
+	if err := cb.RmProject(c.Args().First(), c.Bool("delete")); err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(app.writer, "Successfully deleted %s\n", c.Args().First())
+
+	return nil // TODO
 }
 
 func parseGitConfig(args []string) map[string]string {

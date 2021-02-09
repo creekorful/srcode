@@ -781,3 +781,106 @@ func TestCodebase_MoveProject(t *testing.T) {
 		t.Fail()
 	}
 }
+
+func TestCodebase_RmProject(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+	repoMock := repository_mock.NewMockRepository(mockCtrl)
+
+	path := t.TempDir()
+
+	codebase := &codebase{
+		manProvider: manProviderMock,
+		repo:        repoMock,
+		rootPath:    path,
+	}
+
+	manProviderMock.EXPECT().
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {Remote: "test-1.git"},
+				"test/something-2": {Remote: "test-2.git"},
+			},
+		}, nil)
+
+	// project doesn't exist
+	if err := codebase.RmProject("test-1", false); !errors.Is(err, ErrNoProjectFound) {
+		t.Fail()
+	}
+
+	// project exist but doesn't delete from disk
+	manProviderMock.EXPECT().
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {Remote: "test-1.git"},
+				"test/something-2": {Remote: "test-2.git"},
+			},
+		}, nil)
+	manProviderMock.EXPECT().
+		Write(filepath.Join(codebase.rootPath, metaDir, manifestFile), manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-2": {Remote: "test-2.git"},
+			},
+		})
+	repoMock.EXPECT().CommitFiles("Remove test/something-1", "manifest.json")
+
+	if err := codebase.RmProject("test/something-1", false); err != nil {
+		t.Fail()
+	}
+
+	// project exist but doesn't delete from disk (from local path)
+	manProviderMock.EXPECT().
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {Remote: "test-1.git"},
+				"test/something-2": {Remote: "test-2.git"},
+			},
+		}, nil)
+	manProviderMock.EXPECT().
+		Write(filepath.Join(codebase.rootPath, metaDir, manifestFile), manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-2": {Remote: "test-2.git"},
+			},
+		})
+	repoMock.EXPECT().CommitFiles("Remove test/something-1", "manifest.json")
+
+	codebase.localPath = "test"
+	if err := codebase.RmProject("something-1", false); err != nil {
+		t.Fail()
+	}
+
+	// project exist but delete from disk
+	manProviderMock.EXPECT().
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {Remote: "test-1.git"},
+				"test/something-2": {Remote: "test-2.git"},
+			},
+		}, nil)
+	codebase.localPath = ""
+	if err := os.MkdirAll(filepath.Join(path, "test", "something-2"), 0750); err != nil {
+		t.FailNow()
+	}
+	manProviderMock.EXPECT().
+		Write(filepath.Join(codebase.rootPath, metaDir, manifestFile), manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {Remote: "test-1.git"},
+			},
+		})
+	repoMock.EXPECT().CommitFiles("Remove test/something-2", "manifest.json")
+
+	if err := codebase.RmProject("test/something-2", true); err != nil {
+		t.Fail()
+	}
+
+	// make sure project deleted
+	if _, err := os.Stat(filepath.Join(path, "test", "something-2")); !os.IsNotExist(err) {
+		t.Errorf("project not deleted")
+	}
+}

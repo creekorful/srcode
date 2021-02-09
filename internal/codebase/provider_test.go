@@ -1,6 +1,7 @@
 package codebase
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/creekorful/srcode/internal/manifest"
@@ -27,7 +28,7 @@ func TestProvider_Init(t *testing.T) {
 
 	// Repository provider fails
 	repoProviderMock.EXPECT().Init(filepath.Join(targetDir, metaDir)).Return(nil, errors.New("test error"))
-	if _, err := provider.Init(targetDir, ""); err == nil {
+	if _, err := provider.Init(targetDir, "", false); err == nil {
 		t.Error(err)
 	}
 
@@ -42,7 +43,7 @@ func TestProvider_Init(t *testing.T) {
 	repoMock.EXPECT().AddRemote("origin", "git@github.com:creekorful/test.git").Return(nil)
 
 	repoProviderMock.EXPECT().Init(filepath.Join(targetDir, metaDir)).Return(repoMock, nil)
-	val, err := provider.Init(targetDir, "git@github.com:creekorful/test.git")
+	val, err := provider.Init(targetDir, "git@github.com:creekorful/test.git", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +51,109 @@ func TestProvider_Init(t *testing.T) {
 	// should create manifest file
 	if _, err := os.Stat(filepath.Join(targetDir, metaDir, manifestFile)); err != nil {
 		t.Error(err)
+	}
+
+	// should create README.md
+	if _, err := os.Stat(filepath.Join(targetDir, metaDir, "README.md")); err != nil {
+		t.Error(err)
+	}
+
+	if val.(*codebase).rootPath != targetDir {
+		t.Fail()
+	}
+	if val.(*codebase).localPath != "" {
+		t.Fail()
+	}
+	if val.LocalPath() != "" {
+		t.Fail()
+	}
+}
+
+func TestProvider_Init_WithImport(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	repoProviderMock := repository_mock.NewMockProvider(mockCtrl)
+	repoMock := repository_mock.NewMockRepository(mockCtrl)
+
+	provider := provider{repoProvider: repoProviderMock}
+
+	// Simulate existing project folder
+	targetDir := filepath.Join(t.TempDir(), "test-directory")
+	if err := os.MkdirAll(targetDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(targetDir, "Contributing", "sudo"), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(targetDir, "php"), 0750); err != nil {
+		t.Fatal(err)
+	}
+
+	// simulate opening of these projects
+	repoProviderMock.EXPECT().Exists(targetDir).Return(false)
+	repoProviderMock.EXPECT().Exists(filepath.Join(targetDir, "Contributing")).Return(false)
+
+	sudoRepoMock := repository_mock.NewMockRepository(mockCtrl)
+	repoProviderMock.EXPECT().Exists(filepath.Join(targetDir, "Contributing", "sudo")).Return(true)
+	repoProviderMock.EXPECT().
+		Open(filepath.Join(targetDir, "Contributing", "sudo")).
+		Return(sudoRepoMock, nil)
+	sudoRepoMock.EXPECT().Remote("origin").Return("git@github.com:Debian/sudo.git", nil)
+
+	phpRepoMock := repository_mock.NewMockRepository(mockCtrl)
+	repoProviderMock.EXPECT().Exists(filepath.Join(targetDir, "php")).Return(true)
+	repoProviderMock.EXPECT().
+		Open(filepath.Join(targetDir, "php")).
+		Return(phpRepoMock, nil)
+	phpRepoMock.EXPECT().Remote("origin").Return("git@github.com:old-stuff/php.git", nil)
+
+	// should create the initial commit
+	repoMock.EXPECT().CommitFiles("Initial commit", "manifest.json", "README.md").Return(nil)
+	// should add remote
+	repoMock.EXPECT().AddRemote("origin", "git@github.com:creekorful/test.git").Return(nil)
+
+	repoProviderMock.EXPECT().Init(filepath.Join(targetDir, metaDir)).Return(repoMock, nil)
+	val, err := provider.Init(targetDir, "git@github.com:creekorful/test.git", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// should create manifest file
+	if _, err := os.Stat(filepath.Join(targetDir, metaDir, manifestFile)); err != nil {
+		t.Error(err)
+	}
+
+	// decode manifest file to make sure projects have been imported
+	var man manifest.Manifest
+	f, err := os.Open(filepath.Join(targetDir, metaDir, manifestFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	if err := json.NewDecoder(f).Decode(&man); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(man.Projects) != 2 {
+		t.Fatal(err)
+	}
+
+	if project, exist := man.Projects["Contributing/sudo"]; !exist {
+		t.Errorf("missing Contributing/sudo project")
+	} else {
+		if project.Remote != "git@github.com:Debian/sudo.git" {
+			t.Errorf("wrong remote: %s", project.Remote)
+		}
+	}
+
+	if project, exist := man.Projects["php"]; !exist {
+		t.Errorf("missing php project")
+	} else {
+		if project.Remote != "git@github.com:old-stuff/php.git" {
+			t.Errorf("wrong remote: %s", project.Remote)
+		}
 	}
 
 	// should create README.md
@@ -78,7 +182,7 @@ func TestProvider_New_CodebaseExist(t *testing.T) {
 		t.FailNow()
 	}
 
-	if _, err := provider.Init(targetDir, ""); !errors.Is(err, ErrCodebaseAlreadyExist) {
+	if _, err := provider.Init(targetDir, "", false); !errors.Is(err, ErrCodebaseAlreadyExist) {
 		t.Errorf("wrong error (got: %s, want: %s)", err, ErrCodebaseAlreadyExist)
 	}
 }
