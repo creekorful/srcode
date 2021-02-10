@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## Changed
+
+- cmd/ls:
+
 ## Fixed
 
 - cmd/script: allow adding global script even outside project folder.
+- cmd/ls: add demo message when running `ls` with no projects.
 
 ## [0.7.0] - 2021-02-10
+
+## Added
+
+- [#20](https://github.com/creekorful/srcode/issues/20) add git hook support.
 
 ## Changed
 
@@ -20,7 +29,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cmd/set-cmd: allow edition of existing command.
 - cmd/set-cmd: rename to script.
 - [#19](https://github.com/creekorful/srcode/issues/19) cmd/script: now we are making script and not just command.
-- [#20](https://github.com/creekorful/srcode/issues/20) add git hook support.
 
 ## [0.6.0] - 2021-02-09
 

@@ -447,7 +447,8 @@ func (app *app) lsProjects(c *cli.Context) error {
 	}
 
 	if len(projects) == 0 {
-		_, _ = fmt.Fprintln(app.writer, "No projects found")
+		_, _ = fmt.Fprintln(app.writer, "No projects in codebase")
+		_, _ = fmt.Fprintln(app.writer, "Tips: add a project using `srcode add git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe`")
 		return nil
 	}
 

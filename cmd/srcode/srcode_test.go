@@ -381,6 +381,25 @@ func TestLsProjects(t *testing.T) {
 	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 
+	// No projects
+	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{}, nil)
+
+	if err := app.getCliApp().Run([]string{"srcode", "ls"}); err != nil {
+		t.Fail()
+	}
+
+	val := b.String()
+	if !strings.Contains(val, "No projects in codebase") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "srcode add git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe") {
+		t.Fail()
+	}
+
+	b.Reset()
+
+	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+
 	repo1 := repository_mock.NewMockRepository(mockCtrl)
 	repo1.EXPECT().Head().Return("develop", nil)
 	repo1.EXPECT().IsDirty().Return(false, nil)
@@ -405,7 +424,7 @@ func TestLsProjects(t *testing.T) {
 		t.Fail()
 	}
 
-	val := b.String()
+	val = b.String()
 	if !strings.Contains(val, "Contributing/test") {
 		t.Fail()
 	}
