@@ -480,22 +480,7 @@ func (app *app) bulkGit(c *cli.Context) error {
 		return err
 	}
 
-	wg := sync.WaitGroup{}
-
-	ch := make(chan string)
-	wg.Add(1)
-	go func() {
-		for out := range ch {
-			_, _ = fmt.Fprintf(app.writer, "%s\n\n", out)
-		}
-		wg.Done()
-	}()
-
-	err = cb.BulkGIT(c.Args().Slice(), ch)
-
-	wg.Wait()
-
-	if err != nil {
+	if err := cb.BulkGIT(c.Args().Slice(), app.writer); err != nil {
 		return err
 	}
 

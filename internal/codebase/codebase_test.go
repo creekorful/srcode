@@ -7,6 +7,7 @@ import (
 	"github.com/creekorful/srcode/internal/manifest_mock"
 	"github.com/creekorful/srcode/internal/repository_mock"
 	"github.com/golang/mock/gomock"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -465,6 +466,7 @@ func TestCodebase_BulkGIT(t *testing.T) {
 			},
 		}, nil)
 
+	sb := &strings.Builder{}
 	for _, path := range []string{"test/something-1", "test/something-2"} {
 		repoMock := repository_mock.NewMockRepository(mockCtrl)
 		repoProviderMock.EXPECT().
@@ -472,11 +474,11 @@ func TestCodebase_BulkGIT(t *testing.T) {
 			Return(repoMock, nil)
 
 		repoMock.EXPECT().
-			RawCmd([]string{"pull", "--rebase"}).
-			Return("", nil)
+			RawCmd([]string{"pull", "--rebase"}, sb).
+			Return(nil)
 	}
 
-	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, nil); err != nil {
+	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, sb); err != nil {
 		t.Fail()
 	}
 }
@@ -504,19 +506,7 @@ func TestCodebase_BulkGIT_WithOut(t *testing.T) {
 			},
 		}, nil)
 
-	wg := sync.WaitGroup{}
-
-	sb := strings.Builder{}
-	ch := make(chan string)
-	go func() {
-		wg.Add(1)
-		for res := range ch {
-			sb.WriteString(res)
-			sb.WriteString("\n")
-		}
-		wg.Done()
-	}()
-
+	sb := &strings.Builder{}
 	for _, path := range []string{"test/something-1", "test/something-2"} {
 		repoMock := repository_mock.NewMockRepository(mockCtrl)
 		repoProviderMock.EXPECT().
@@ -524,17 +514,20 @@ func TestCodebase_BulkGIT_WithOut(t *testing.T) {
 			Return(repoMock, nil)
 
 		repoMock.EXPECT().
-			RawCmd([]string{"pull", "--rebase"}).
-			Return(fmt.Sprintf("out: %s", path), nil)
+			RawCmd([]string{"pull", "--rebase"}, sb).
+			Do(func(path string) func([]string, io.Writer) {
+				return func(args []string, w io.Writer) {
+					_, _ = io.WriteString(w, fmt.Sprintf("out: %s", path))
+				}
+			}(path)).Return(nil)
 	}
 
-	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, ch); err != nil {
+	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, sb); err != nil {
 		t.Fail()
 	}
 
-	wg.Wait()
-
 	val := sb.String()
+
 	if !strings.Contains(val, "out: test/something-1") {
 		t.Fail()
 	}

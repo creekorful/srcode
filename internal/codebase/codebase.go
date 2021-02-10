@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/creekorful/srcode/internal/repository"
+	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
@@ -40,7 +41,7 @@ type Codebase interface {
 	Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error
 	LocalPath() string
 	Run(command string, writer io.Writer) error
-	BulkGIT(args []string, out chan<- string) error
+	BulkGIT(args []string, writer io.Writer) error
 	SetCommand(name, command string, global bool) error
 	MoveProject(oldPath, newPath string) error
 	RmProject(path string, delete bool) error
@@ -296,17 +297,14 @@ func (codebase *codebase) Run(command string, writer io.Writer) error {
 	return cmd.Run()
 }
 
-func (codebase *codebase) BulkGIT(args []string, out chan<- string) error {
-	defer func() {
-		if out != nil {
-			close(out)
-		}
-	}()
-
+func (codebase *codebase) BulkGIT(args []string, writer io.Writer) error {
 	man, err := codebase.readManifest()
 	if err != nil {
 		return err
 	}
+
+	sepStyle := color.New(color.Bold, color.FgHiYellow).Sprint("===")
+	pathStyle := color.New(color.Bold, color.FgHiWhite)
 
 	for path := range man.Projects {
 		repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, path))
@@ -314,14 +312,13 @@ func (codebase *codebase) BulkGIT(args []string, out chan<- string) error {
 			return err
 		}
 
-		res, err := repo.RawCmd(args)
-		if err != nil {
+		_, _ = io.WriteString(writer, fmt.Sprintf("%s /%s %s\n\n", sepStyle, pathStyle.Sprint(path), sepStyle))
+
+		if err := repo.RawCmd(args, writer); err != nil {
 			return err
 		}
 
-		if out != nil {
-			out <- res
-		}
+		_, _ = io.WriteString(writer, "\n")
 	}
 
 	return nil

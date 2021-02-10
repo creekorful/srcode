@@ -455,8 +455,7 @@ func TestBulkGit(t *testing.T) {
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 
 	codebaseMock.EXPECT().
-		BulkGIT([]string{"pull", "--rebase", "--prune"}, gomock.Any()).
-		Do(func(args []string, ch chan<- string) { close(ch) })
+		BulkGIT([]string{"pull", "--rebase", "--prune"}, b)
 
 	if err := app.getCliApp().Run([]string{"srcode", "bulk-git", "pull", "--rebase", "--prune"}); err != nil {
 		t.Fail()
