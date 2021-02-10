@@ -7,6 +7,7 @@ import (
 	"github.com/creekorful/srcode/internal/manifest_mock"
 	"github.com/creekorful/srcode/internal/repository_mock"
 	"github.com/golang/mock/gomock"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -218,6 +219,12 @@ func TestCodebase_Sync(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "test", "a", "b"), 0750); err != nil {
 		t.FailNow()
 	}
+	if err := os.MkdirAll(filepath.Join(dir, "test-12", ".git", "hooks"), 0750); err != nil {
+		t.Fatal()
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "test", "c", "d", ".git", "hooks"), 0750); err != nil {
+		t.Fatal()
+	}
 
 	manProviderMock.EXPECT().
 		Read(filepath.Join(dir, metaDir, manifestFile)).
@@ -240,13 +247,24 @@ func TestCodebase_Sync(t *testing.T) {
 					Config: map[string]string{
 						"user.name": "Aloïs Micard",
 					},
+					Scripts: map[string][]string{
+						"test-local": {"go test -v"},
+					},
+					Hook: "test-local",
 				},
 				"test/c/d": {
 					Remote: "test.git",
 					Config: map[string]string{
 						"user.mail": "alois@micard.lu",
 					},
+					Scripts: map[string][]string{
+						"test-global": {"@global-test"},
+					},
+					Hook: "test-global",
 				},
+			},
+			Scripts: map[string][]string{
+				"global-test": {"go test"},
 			},
 		}, nil)
 
@@ -298,6 +316,24 @@ func TestCodebase_Sync(t *testing.T) {
 	}
 	if len(deleted) != 1 || deleted["test/a/b"].Remote != "test.git" {
 		t.Fail()
+	}
+
+	// make sure hook is copied
+	b, err := ioutil.ReadFile(filepath.Join(dir, "test-12", ".git", "hooks", "pre-commit"))
+	if err != nil {
+		t.Error(err)
+	}
+	if string(b) != "go test -v" {
+		t.Fatalf("got: %s want: go lint", string(b))
+	}
+
+	// make sure hook is copied
+	b, err = ioutil.ReadFile(filepath.Join(dir, "test", "c", "d", ".git", "hooks", "pre-commit"))
+	if err != nil {
+		t.Error(err)
+	}
+	if string(b) != "go test" {
+		t.Error(err)
 	}
 
 	// make sure we have deleted the directory
@@ -397,48 +433,48 @@ func TestCodebase_Run(t *testing.T) {
 		Return(manifest.Manifest{
 			Projects: map[string]manifest.Project{
 				"test/something": {
-					Commands: map[string]string{
-						"greet-local":    "echo Hello from local command",
-						"greet-global":   "@greet",
-						"invalid-global": "@invalid",
+					Scripts: map[string][]string{
+						"greet-local":    {"echo Hello from local script"},
+						"greet-global":   {"@greet"},
+						"invalid-global": {"@invalid"},
 					},
 				},
 			},
-			Commands: map[string]string{
-				"greet": "echo Hello from global command",
+			Scripts: map[string][]string{
+				"greet": {"echo Hello from global script"},
 			},
 		}, nil)
 
-	// Try to run command from a non-project directory
-	if err := codebase.Run("greet-local", b); !errors.Is(err, ErrNoProjectFound) {
+	// Try to run script from a non-project directory
+	if err := codebase.Run("greet-local", b); !errors.Is(err, manifest.ErrNoProjectFound) {
 		t.Fail()
 	}
 
 	// CD inside a project
 	codebase.localPath = "test/something"
 
-	// Try to run an non existing local command
-	if err := codebase.Run("blah", b); !errors.Is(err, ErrCommandNotFound) {
+	// Try to run an non existing local script
+	if err := codebase.Run("blah", b); !errors.Is(err, manifest.ErrScriptNotFound) {
 		t.Fail()
 	}
 
-	// Try to run an non existing global command
-	if err := codebase.Run("invalid-global", b); !errors.Is(err, ErrCommandNotFound) {
+	// Try to run an non existing global script
+	if err := codebase.Run("invalid-global", b); !errors.Is(err, manifest.ErrScriptNotFound) {
 		t.Fail()
 	}
 
-	// Try to run a local command
+	// Try to run a local script
 	b.Reset()
-	if err := codebase.Run("greet-local", b); err != nil || b.String() != "Hello from local command\n" {
+	if err := codebase.Run("greet-local", b); err != nil || b.String() != "Hello from local script\n" {
 		t.Errorf("error: %v", err)
-		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from local command")
+		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from local script")
 	}
 
-	// Try to run a global command
+	// Try to run a global script
 	b.Reset()
-	if err := codebase.Run("greet-global", b); err != nil || b.String() != "Hello from global command\n" {
+	if err := codebase.Run("greet-global", b); err != nil || b.String() != "Hello from global script\n" {
 		t.Errorf("error: %v", err)
-		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from global command")
+		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from global script")
 	}
 }
 
@@ -465,6 +501,7 @@ func TestCodebase_BulkGIT(t *testing.T) {
 			},
 		}, nil)
 
+	sb := &strings.Builder{}
 	for _, path := range []string{"test/something-1", "test/something-2"} {
 		repoMock := repository_mock.NewMockRepository(mockCtrl)
 		repoProviderMock.EXPECT().
@@ -472,11 +509,11 @@ func TestCodebase_BulkGIT(t *testing.T) {
 			Return(repoMock, nil)
 
 		repoMock.EXPECT().
-			RawCmd([]string{"pull", "--rebase"}).
-			Return("", nil)
+			RawCmd([]string{"pull", "--rebase"}, sb).
+			Return(nil)
 	}
 
-	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, nil); err != nil {
+	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, sb); err != nil {
 		t.Fail()
 	}
 }
@@ -504,19 +541,7 @@ func TestCodebase_BulkGIT_WithOut(t *testing.T) {
 			},
 		}, nil)
 
-	wg := sync.WaitGroup{}
-
-	sb := strings.Builder{}
-	ch := make(chan string)
-	go func() {
-		wg.Add(1)
-		for res := range ch {
-			sb.WriteString(res)
-			sb.WriteString("\n")
-		}
-		wg.Done()
-	}()
-
+	sb := &strings.Builder{}
 	for _, path := range []string{"test/something-1", "test/something-2"} {
 		repoMock := repository_mock.NewMockRepository(mockCtrl)
 		repoProviderMock.EXPECT().
@@ -524,17 +549,20 @@ func TestCodebase_BulkGIT_WithOut(t *testing.T) {
 			Return(repoMock, nil)
 
 		repoMock.EXPECT().
-			RawCmd([]string{"pull", "--rebase"}).
-			Return(fmt.Sprintf("out: %s", path), nil)
+			RawCmd([]string{"pull", "--rebase"}, sb).
+			Do(func(path string) func([]string, io.Writer) {
+				return func(args []string, w io.Writer) {
+					_, _ = io.WriteString(w, fmt.Sprintf("out: %s", path))
+				}
+			}(path)).Return(nil)
 	}
 
-	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, ch); err != nil {
+	if err := codebase.BulkGIT([]string{"pull", "--rebase"}, sb); err != nil {
 		t.Fail()
 	}
 
-	wg.Wait()
-
 	val := sb.String()
+
 	if !strings.Contains(val, "out: test/something-1") {
 		t.Fail()
 	}
@@ -543,7 +571,7 @@ func TestCodebase_BulkGIT_WithOut(t *testing.T) {
 	}
 }
 
-func TestCodebase_SetCommand(t *testing.T) {
+func TestCodebase_SetScript(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -565,7 +593,7 @@ func TestCodebase_SetCommand(t *testing.T) {
 		}, nil)
 
 	// from should should only works with global = true
-	if err := codebase.SetCommand("test", "test", false); !errors.Is(err, ErrNoProjectFound) {
+	if err := codebase.SetScript("test", []string{"test"}, false); !errors.Is(err, manifest.ErrNoProjectFound) {
 		t.Fail()
 	}
 
@@ -583,16 +611,16 @@ func TestCodebase_SetCommand(t *testing.T) {
 				Projects: map[string]manifest.Project{
 					"test/something": {},
 				},
-				Commands: map[string]string{
-					"test": "test",
+				Scripts: map[string][]string{
+					"test": {"test"},
 				},
 			}).
 		Return(nil)
 
-	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
+	repoMock.EXPECT().CommitFiles("Add global script `test`", "manifest.json")
 
 	// should works
-	if err := codebase.SetCommand("test", "test", true); err != nil {
+	if err := codebase.SetScript("test", []string{"test"}, true); err != nil {
 		t.Fail()
 	}
 
@@ -612,17 +640,17 @@ func TestCodebase_SetCommand(t *testing.T) {
 			manifest.Manifest{
 				Projects: map[string]manifest.Project{
 					"test/something": {
-						Commands: map[string]string{
-							"test": "test",
+						Scripts: map[string][]string{
+							"test": {"test"},
 						},
 					},
 				},
 			}).
 		Return(nil)
 
-	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
+	repoMock.EXPECT().CommitFiles("Add script `test` to /test/something", "manifest.json")
 
-	if err := codebase.SetCommand("test", "test", false); err != nil {
+	if err := codebase.SetScript("test", []string{"test"}, false); err != nil {
 		t.Fail()
 	}
 
@@ -640,15 +668,15 @@ func TestCodebase_SetCommand(t *testing.T) {
 				Projects: map[string]manifest.Project{
 					"test/something": {},
 				},
-				Commands: map[string]string{
-					"test": "test",
+				Scripts: map[string][]string{
+					"test": {"test"},
 				},
 			}).
 		Return(nil)
 
-	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
+	repoMock.EXPECT().CommitFiles("Add global script `test`", "manifest.json")
 
-	if err := codebase.SetCommand("test", "test", true); err != nil {
+	if err := codebase.SetScript("test", []string{"test"}, true); err != nil {
 		t.Fail()
 	}
 }
@@ -695,14 +723,14 @@ func TestCodebase_MoveProject(t *testing.T) {
 			},
 		}, nil)
 
-	if err := codebase.MoveProject("test-1/something", "test-2/something"); !errors.Is(err, ErrNoProjectFound) {
-		t.Errorf("wrong error (got: %s, want: %s)", err, ErrNoProjectFound)
+	if err := codebase.MoveProject("test-1/something", "test-2/something"); !errors.Is(err, manifest.ErrNoProjectFound) {
+		t.Errorf("wrong error (got: %s, want: %s)", err, manifest.ErrNoProjectFound)
 	}
 
 	// Move src doesn't exist relative path
 	codebase.localPath = "test-1"
-	if err := codebase.MoveProject("something", "test-2/something"); !errors.Is(err, ErrNoProjectFound) {
-		t.Errorf("wrong error (got: %s, want: %s)", err, ErrNoProjectFound)
+	if err := codebase.MoveProject("something", "test-2/something"); !errors.Is(err, manifest.ErrNoProjectFound) {
+		t.Errorf("wrong error (got: %s, want: %s)", err, manifest.ErrNoProjectFound)
 	}
 
 	// Move dest exist full path
@@ -807,7 +835,7 @@ func TestCodebase_RmProject(t *testing.T) {
 		}, nil)
 
 	// project doesn't exist
-	if err := codebase.RmProject("test-1", false); !errors.Is(err, ErrNoProjectFound) {
+	if err := codebase.RmProject("test-1", false); !errors.Is(err, manifest.ErrNoProjectFound) {
 		t.Fail()
 	}
 
@@ -882,5 +910,191 @@ func TestCodebase_RmProject(t *testing.T) {
 	// make sure project deleted
 	if _, err := os.Stat(filepath.Join(path, "test", "something-2")); !os.IsNotExist(err) {
 		t.Errorf("project not deleted")
+	}
+}
+
+func TestCodebase_SetHook(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+	repoMock := repository_mock.NewMockRepository(mockCtrl)
+
+	path := t.TempDir()
+
+	codebase := &codebase{
+		manProvider: manProviderMock,
+		repo:        repoMock,
+		rootPath:    path,
+	}
+
+	// create codebase structure
+	if err := os.MkdirAll(filepath.Join(path, "test", "something-1", ".git", "hooks"), 0750); err != nil {
+		t.Fatal()
+	}
+	if err := os.MkdirAll(filepath.Join(path, "test", "something-2", ".git", "hooks"), 0750); err != nil {
+		t.Fatal()
+	}
+
+	// set hook not in project
+	manProviderMock.EXPECT().
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {
+					Remote: "test-1.git",
+					Scripts: map[string][]string{
+						"test-12": {"echo hello"},
+					},
+				},
+				"test/something-2": {
+					Remote: "test-2.git",
+					Scripts: map[string][]string{
+						"test-42": {"@global-42"},
+					},
+				},
+			},
+			Scripts: map[string][]string{
+				"global-42": {"#/bin/sh", "echo hello from global"},
+			},
+		}, nil)
+	if err := codebase.SetHook("test-12"); !errors.Is(err, manifest.ErrNoProjectFound) {
+		t.Fail()
+	}
+
+	// set hook no script
+	manProviderMock.EXPECT().
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {
+					Remote: "test-1.git",
+					Scripts: map[string][]string{
+						"test-12": {"echo hello"},
+					},
+				},
+				"test/something-2": {
+					Remote: "test-2.git",
+					Scripts: map[string][]string{
+						"test-42": {"@global-42"},
+					},
+				},
+			},
+			Scripts: map[string][]string{
+				"global-42": {"#/bin/sh", "echo hello from global"},
+			},
+		}, nil)
+	codebase.localPath = "test/something-1"
+	if err := codebase.SetHook("test-111"); !errors.Is(err, manifest.ErrScriptNotFound) {
+		t.Error(err)
+	}
+
+	// test set local hook working
+	manProviderMock.EXPECT().
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {
+					Remote: "test-1.git",
+					Scripts: map[string][]string{
+						"test-12": {"echo hello"},
+					},
+				},
+				"test/something-2": {
+					Remote: "test-2.git",
+					Scripts: map[string][]string{
+						"test-42": {"@global-42"},
+					},
+				},
+			},
+			Scripts: map[string][]string{
+				"global-42": {"#/bin/sh", "echo hello from global"},
+			},
+		}, nil)
+	manProviderMock.EXPECT().Write(filepath.Join(codebase.rootPath, metaDir, manifestFile), manifest.Manifest{
+		Projects: map[string]manifest.Project{
+			"test/something-1": {
+				Remote: "test-1.git",
+				Scripts: map[string][]string{
+					"test-12": {"echo hello"},
+				},
+				Hook: "test-12",
+			},
+			"test/something-2": {
+				Remote: "test-2.git",
+				Scripts: map[string][]string{
+					"test-42": {"@global-42"},
+				},
+			},
+		},
+		Scripts: map[string][]string{
+			"global-42": {"#/bin/sh", "echo hello from global"},
+		},
+	})
+	repoMock.EXPECT().CommitFiles("Set pre-commit hook `test-12` for test/something-1", manifestFile)
+	if err := codebase.SetHook("test-12"); err != nil {
+		t.Fail()
+	}
+	b, err := ioutil.ReadFile(filepath.Join(path, "test", "something-1", ".git", "hooks", "pre-commit"))
+	if err != nil {
+		t.Fail()
+	}
+	if string(b) != "echo hello" {
+		t.Fatal()
+	}
+
+	// test set global hook working
+	manProviderMock.EXPECT().
+		Read(filepath.Join(codebase.rootPath, metaDir, manifestFile)).
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/something-1": {
+					Remote: "test-1.git",
+					Scripts: map[string][]string{
+						"test-12": {"echo hello"},
+					},
+				},
+				"test/something-2": {
+					Remote: "test-2.git",
+					Scripts: map[string][]string{
+						"test-42": {"@global-42"},
+					},
+				},
+			},
+			Scripts: map[string][]string{
+				"global-42": {"#/bin/sh", "echo hello from global"},
+			},
+		}, nil)
+	codebase.localPath = "test/something-2"
+	manProviderMock.EXPECT().Write(filepath.Join(codebase.rootPath, metaDir, manifestFile), manifest.Manifest{
+		Projects: map[string]manifest.Project{
+			"test/something-1": {
+				Remote: "test-1.git",
+				Scripts: map[string][]string{
+					"test-12": {"echo hello"},
+				},
+			},
+			"test/something-2": {
+				Remote: "test-2.git",
+				Scripts: map[string][]string{
+					"test-42": {"@global-42"},
+				},
+				Hook: "test-42",
+			},
+		},
+		Scripts: map[string][]string{
+			"global-42": {"#/bin/sh", "echo hello from global"},
+		},
+	})
+	repoMock.EXPECT().CommitFiles("Set pre-commit hook `test-42` for test/something-2", manifestFile)
+	if err := codebase.SetHook("test-42"); err != nil {
+		t.Fail()
+	}
+	b, err = ioutil.ReadFile(filepath.Join(path, "test", "something-2", ".git", "hooks", "pre-commit"))
+	if err != nil {
+		t.Fail()
+	}
+	if string(b) != "#/bin/sh\necho hello from global" {
+		t.Fatal()
 	}
 }

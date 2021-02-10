@@ -4,12 +4,16 @@ import (
 	"errors"
 	"fmt"
 	"github.com/creekorful/srcode/internal/codebase"
+	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 	"io"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -23,11 +27,12 @@ var (
 	errWrongInitUsage       = errors.New("correct usage: srcode init <path>")
 	errWrongCloneUsage      = errors.New("correct usage: srcode clone <remote> [<path>]")
 	errWrongAddProjectUsage = errors.New("correct usage: srcode add <remote> [<path>]")
-	errWrongRunUsage        = errors.New("correct usage: srcode run <command>")
+	errWrongRunUsage        = errors.New("correct usage: srcode run <script>")
 	errWrongBulkGitUsage    = errors.New("correct usage: srcode bulk-git <args>")
-	errWrongSetCmdUsage     = errors.New("correct usage: srcode set-cmd <name> <command>")
+	errWrongScriptUsage     = errors.New("correct usage: srcode script <name> [<script>]")
 	errWrongMvUsage         = errors.New("correct usage: srcode mv <src> <dst>")
 	errWrongRmUsage         = errors.New("correct usage: srcode rm <path>")
+	errWrongHookUsage       = errors.New("correct usage: srcode hook <script>")
 )
 
 func main() {
@@ -147,15 +152,15 @@ Print the codebase working directory - i.e the working directory relative to the
 			},
 			{
 				Name:      "run",
-				Usage:     "Run a codebase command",
-				Action:    app.runCmd,
-				ArgsUsage: "<command>",
+				Usage:     "Run a codebase script",
+				Action:    app.runScript,
+				ArgsUsage: "<script>",
 				Description: `
-Run a command inside a codebase project.
+Run a script inside a codebase project.
 
 Examples
 
-- Execute a command named lint:
+- Execute a script named lint:
   $ srcode run lint
   $ srcode lint`,
 			},
@@ -180,29 +185,32 @@ Examples
   $ srcode bulk-git pull --rebase`,
 			},
 			{
-				Name:      "set-cmd",
-				Usage:     "Add a codebase command",
-				Action:    app.setCmd,
-				ArgsUsage: "<name> <command>",
+				Name:      "script",
+				Usage:     "Add a codebase script",
+				Action:    app.setScript,
+				ArgsUsage: "<name> [<script>]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "global",
-						Usage: "If true make the command global",
+						Usage: "If true make the script global",
 					},
 				},
 				Description: `
-Add a command to the codebase, either at global level (--global) or
+Add a script to the codebase, either at global level (--global) or
 at project level.
 
 Examples
 
-- Create a global go-test command:
-  $ srcode set-cmd --global go-test go test -v ./...
+- Create a global go-test script:
+  $ srcode script --global go-test go test -v ./...
 
-- Link a project local test command to the previously defined global alias:
-  $ srcode set-cmd test @go-test
+- Link a project local test script to the previously defined global alias:
+  $ srcode script test @go-test
 
-Now you can use 'srcode run test' or 'srcode test' to execute the command
+- Create a project local test script, and edit it using $EDITOR:
+  $ srcode script test
+
+Now you can use 'srcode run test' or 'srcode test' to execute the script
 from project directory.`,
 			},
 			{
@@ -239,12 +247,26 @@ Examples
 - Remove a project located at Contributing/Test and remove from disk too:
   $ srcode rm --delete Contributing/Test`,
 			},
+			{
+				Name:      "hook",
+				Usage:     "Set project Git hook",
+				Action:    app.hook,
+				ArgsUsage: "<script>",
+				Description: `
+Set the Git hook of current project. This will lookup for the script with
+given name, and copy the content to the .git/hooks folder.
+
+Examples
+
+- Set Git hook of current project:
+  $ srcode hook lint`,
+			},
 		},
 		Authors: []*cli.Author{{
 			Name:  "Aloïs Micard",
 			Email: "alois@micard.lu",
 		}},
-		Action: app.runCmd, // shortcut: use srcode <command> to execute a codebase command easily
+		Action: app.runScript, // shortcut: use srcode <script> to execute a codebase script easily
 	}
 }
 
@@ -400,7 +422,7 @@ func (app *app) pwd(c *cli.Context) error {
 	return nil
 }
 
-func (app *app) runCmd(c *cli.Context) error {
+func (app *app) runScript(c *cli.Context) error {
 	if !c.Args().Present() {
 		return errWrongRunUsage
 	}
@@ -480,31 +502,16 @@ func (app *app) bulkGit(c *cli.Context) error {
 		return err
 	}
 
-	wg := sync.WaitGroup{}
-
-	ch := make(chan string)
-	wg.Add(1)
-	go func() {
-		for out := range ch {
-			_, _ = fmt.Fprintf(app.writer, "%s\n\n", out)
-		}
-		wg.Done()
-	}()
-
-	err = cb.BulkGIT(c.Args().Slice(), ch)
-
-	wg.Wait()
-
-	if err != nil {
+	if err := cb.BulkGIT(c.Args().Slice(), app.writer); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (app *app) setCmd(c *cli.Context) error {
-	if c.NArg() < 2 {
-		return errWrongSetCmdUsage
+func (app *app) setScript(c *cli.Context) error {
+	if c.NArg() < 1 {
+		return errWrongScriptUsage
 	}
 
 	cb, err := app.openCodebase()
@@ -512,7 +519,43 @@ func (app *app) setCmd(c *cli.Context) error {
 		return err
 	}
 
-	return cb.SetCommand(c.Args().First(), strings.Join(c.Args().Tail(), " "), c.Bool("global"))
+	// Make sure there's a project at current path
+	projects, err := cb.Projects()
+	if err != nil {
+		return err
+	}
+
+	project, exist := projects[cb.LocalPath()]
+	if !exist {
+		return manifest.ErrNoProjectFound
+	}
+
+	var script []string
+
+	if c.NArg() >= 2 {
+		// script provided directly trough CLI
+		script = []string{strings.Join(c.Args().Tail(), " ")}
+	} else {
+		// get previous script definition
+		var previousScript []string
+		if val, exist := project.Project.Scripts[c.Args().First()]; exist {
+			previousScript = val
+		}
+
+		// otherwise open $EDITOR and read input
+		val, err := captureInputFromEditor(previousScript)
+		if err != nil {
+			return err
+		}
+
+		script = val
+
+		if reflect.DeepEqual(script, previousScript) || len(script) == 0 {
+			return nil // nothing to do
+		}
+	}
+
+	return cb.SetScript(c.Args().First(), script, c.Bool("global"))
 }
 
 func (app *app) mvProject(c *cli.Context) error {
@@ -550,7 +593,40 @@ func (app *app) rmProject(c *cli.Context) error {
 
 	_, _ = fmt.Fprintf(app.writer, "Successfully deleted %s\n", c.Args().First())
 
-	return nil // TODO
+	return nil
+}
+
+func (app *app) hook(c *cli.Context) error {
+	if c.NArg() != 1 {
+		return errWrongHookUsage
+	}
+
+	cb, err := app.openCodebase()
+	if err != nil {
+		return err
+	}
+
+	if err := cb.SetHook(c.Args().First()); err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(app.writer, "Successfully applied hook `%s` to /%s\n", c.Args().First(), cb.LocalPath())
+
+	return nil
+}
+
+func (app *app) openCodebase() (codebase.Codebase, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	cb, err := app.codebaseProvider.Open(cwd)
+	if err != nil {
+		return nil, err
+	}
+
+	return cb, nil
 }
 
 func parseGitConfig(args []string) map[string]string {
@@ -566,16 +642,46 @@ func parseGitConfig(args []string) map[string]string {
 	return config
 }
 
-func (app *app) openCodebase() (codebase.Codebase, error) {
-	cwd, err := os.Getwd()
+func captureInputFromEditor(initialContent []string) ([]string, error) {
+	file, err := ioutil.TempFile(os.TempDir(), "*")
+	if err != nil {
+		return nil, err
+	}
+	path := file.Name()
+
+	defer os.Remove(path)
+
+	// write initial content if any
+	if len(initialContent) > 0 {
+		if _, err := io.WriteString(file, strings.Join(initialContent, "\n")); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := file.Close(); err != nil {
+		return nil, err
+	}
+
+	// lookup default editor
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim" // ;D
+	}
+
+	// open the editor on the temporary file
+	cmd := exec.Command(editor, path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, err
+	}
+
+	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 
-	cb, err := app.codebaseProvider.Open(cwd)
-	if err != nil {
-		return nil, err
-	}
-
-	return cb, nil
+	return strings.Split(strings.TrimSuffix(string(b), "\n"), "\n"), nil
 }

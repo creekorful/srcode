@@ -8,6 +8,7 @@ import (
 	"github.com/creekorful/srcode/internal/manifest_mock"
 	"github.com/creekorful/srcode/internal/repository_mock"
 	"github.com/golang/mock/gomock"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -316,19 +317,39 @@ func TestProvider_Clone(t *testing.T) {
 		Clone("test-remote", filepath.Join(targetDir, metaDir)).
 		Return(nil, nil)
 
+	// simulate codebase structure
+	if err := os.MkdirAll(filepath.Join(targetDir, "test", "12", ".git", "hooks"), 0750); err != nil {
+		t.Fatal()
+	}
+	if err := os.MkdirAll(filepath.Join(targetDir, "test-another", ".git", "hooks"), 0750); err != nil {
+		t.Fatal()
+	}
+
 	// Simulate dummy manifest
 	manifestProviderMock.EXPECT().
 		Read(filepath.Join(targetDir, metaDir, manifestFile)).
-		Return(manifest.Manifest{Projects: map[string]manifest.Project{
-			"test/12": {
-				Remote: "https://example.org/test.git",
-				Config: map[string]string{"user.name": "Aloïs Micard"},
+		Return(manifest.Manifest{
+			Projects: map[string]manifest.Project{
+				"test/12": {
+					Remote: "https://example.org/test.git",
+					Config: map[string]string{"user.name": "Aloïs Micard"},
+					Scripts: map[string][]string{
+						"lint-12": {"go lint"},
+					},
+					Hook: "lint-12",
+				},
+				"test-another": {
+					Remote: "git@example.org:example/test.git",
+					Config: map[string]string{"user.email": "alois@micard.lu"},
+					Scripts: map[string][]string{
+						"lint-global": {"@global-lint"},
+					},
+					Hook: "lint-global",
+				},
 			},
-			"test-another": {
-				Remote: "git@example.org:example/test.git",
-				Config: map[string]string{"user.email": "alois@micard.lu"},
-			},
-		}}, nil)
+			Scripts: map[string][]string{
+				"global-lint": {"golint -w"},
+			}}, nil)
 
 	// We should clone the projects & configure them
 	repoMock := repository_mock.NewMockRepository(mockCtrl)
@@ -364,5 +385,23 @@ func TestProvider_Clone(t *testing.T) {
 	}
 	if !strings.Contains(buffer, "test-another git@example.org:example/test.git") {
 		t.Fail()
+	}
+
+	// make sure hook is copied
+	b, err := ioutil.ReadFile(filepath.Join(targetDir, "test", "12", ".git", "hooks", "pre-commit"))
+	if err != nil {
+		t.Fail()
+	}
+	if string(b) != "go lint" {
+		t.Fatalf("got: %s want: go lint", string(b))
+	}
+
+	// make sure hook is copied
+	b, err = ioutil.ReadFile(filepath.Join(targetDir, "test-another", ".git", "hooks", "pre-commit"))
+	if err != nil {
+		t.Fail()
+	}
+	if string(b) != "golint -w" {
+		t.Fatal()
 	}
 }
