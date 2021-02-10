@@ -507,7 +507,9 @@ func (app *app) setCmd(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if _, exist := projects[cb.LocalPath()]; !exist {
+
+	project, exist := projects[cb.LocalPath()]
+	if !exist {
 		return codebase.ErrNoProjectFound
 	}
 
@@ -517,13 +519,23 @@ func (app *app) setCmd(c *cli.Context) error {
 		// command provided directly trough CLI
 		cmd = strings.Join(c.Args().Tail(), " ")
 	} else {
+		// get previous command definition
+		previousCmd := ""
+		if val, exist := project.Project.Commands[c.Args().First()]; exist {
+			previousCmd = val
+		}
+
 		// otherwise open $EDITOR and read input
-		val, err := captureInputFromEditor()
+		val, err := captureInputFromEditor(previousCmd)
 		if err != nil {
 			return err
 		}
 
 		cmd = val
+
+		if cmd == previousCmd || cmd == "" {
+			return nil // nothing to do
+		}
 	}
 
 	return cb.SetCommand(c.Args().First(), cmd, c.Bool("global"))
@@ -594,7 +606,7 @@ func (app *app) openCodebase() (codebase.Codebase, error) {
 	return cb, nil
 }
 
-func captureInputFromEditor() (string, error) {
+func captureInputFromEditor(initialContent string) (string, error) {
 	file, err := ioutil.TempFile(os.TempDir(), "*")
 	if err != nil {
 		return "", err
@@ -602,6 +614,13 @@ func captureInputFromEditor() (string, error) {
 	path := file.Name()
 
 	defer os.Remove(path)
+
+	// write initial content if any
+	if initialContent != "" {
+		if _, err := io.WriteString(file, initialContent); err != nil {
+			return "", err
+		}
+	}
 
 	if err := file.Close(); err != nil {
 		return "", err
