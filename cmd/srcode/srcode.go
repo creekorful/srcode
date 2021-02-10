@@ -519,14 +519,14 @@ func (app *app) setScript(c *cli.Context) error {
 		return err
 	}
 
-	// Make sure there's a project at current path
 	projects, err := cb.Projects()
 	if err != nil {
 		return err
 	}
-
 	project, exist := projects[cb.LocalPath()]
-	if !exist {
+
+	// Make sure there's a project at current path (if adding local script)
+	if !exist && !c.Bool("global") {
 		return manifest.ErrNoProjectFound
 	}
 

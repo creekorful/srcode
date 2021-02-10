@@ -507,7 +507,7 @@ func TestScript(t *testing.T) {
 	// test set global command
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{"test-42": {}}, nil)
-	codebaseMock.EXPECT().LocalPath().Return("test-42")
+	codebaseMock.EXPECT().LocalPath().Return("")
 	codebaseMock.EXPECT().SetScript("go-test", []string{"go test -race -v ./..."}, true)
 
 	if err := app.getCliApp().Run([]string{"srcode", "script", "--global", "go-test", "go", "test", "-race", "-v", "./..."}); err != nil {
