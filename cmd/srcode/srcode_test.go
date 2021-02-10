@@ -322,7 +322,7 @@ func TestPwd(t *testing.T) {
 	}
 }
 
-func TestRunCmd(t *testing.T) {
+func TestRunScript(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -463,7 +463,7 @@ func TestBulkGit(t *testing.T) {
 	}
 }
 
-func TestSetCmd(t *testing.T) {
+func TestScript(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
