@@ -479,8 +479,8 @@ func TestSetCmd(t *testing.T) {
 	}
 
 	// test with no enough args should fails
-	if err := app.getCliApp().Run([]string{"srcode", "set-cmd"}); err != errWrongSetCmdUsage {
-		t.Errorf("got %v want %v", err, errWrongSetCmdUsage)
+	if err := app.getCliApp().Run([]string{"srcode", "script"}); err != errWrongScriptUsage {
+		t.Errorf("got %v want %v", err, errWrongScriptUsage)
 	}
 
 	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
@@ -490,7 +490,7 @@ func TestSetCmd(t *testing.T) {
 	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{}, nil)
 	codebaseMock.EXPECT().LocalPath().Return("test-12")
 
-	if err := app.getCliApp().Run([]string{"srcode", "set-cmd", "test", "@go-test"}); !errors.Is(err, codebase.ErrNoProjectFound) {
+	if err := app.getCliApp().Run([]string{"srcode", "script", "test", "@go-test"}); !errors.Is(err, codebase.ErrNoProjectFound) {
 		t.Fail()
 	}
 
@@ -498,9 +498,9 @@ func TestSetCmd(t *testing.T) {
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{"test-12": {}}, nil)
 	codebaseMock.EXPECT().LocalPath().Return("test-12")
-	codebaseMock.EXPECT().SetCommand("test", "@go-test", false)
+	codebaseMock.EXPECT().SetScript("test", []string{"@go-test"}, false)
 
-	if err := app.getCliApp().Run([]string{"srcode", "set-cmd", "test", "@go-test"}); err != nil {
+	if err := app.getCliApp().Run([]string{"srcode", "script", "test", "@go-test"}); err != nil {
 		t.Fail()
 	}
 
@@ -508,9 +508,9 @@ func TestSetCmd(t *testing.T) {
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{"test-42": {}}, nil)
 	codebaseMock.EXPECT().LocalPath().Return("test-42")
-	codebaseMock.EXPECT().SetCommand("go-test", "go test -race -v ./...", true)
+	codebaseMock.EXPECT().SetScript("go-test", []string{"go test -race -v ./..."}, true)
 
-	if err := app.getCliApp().Run([]string{"srcode", "set-cmd", "--global", "go-test", "go", "test", "-race", "-v", "./..."}); err != nil {
+	if err := app.getCliApp().Run([]string{"srcode", "script", "--global", "go-test", "go", "test", "-race", "-v", "./..."}); err != nil {
 		t.Fail()
 	}
 }

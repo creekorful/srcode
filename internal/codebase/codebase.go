@@ -10,6 +10,7 @@ import (
 	"github.com/fatih/color"
 	"golang.org/x/sync/errgroup"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,8 +23,8 @@ var (
 	ErrPathTaken = errors.New("a project already exist at given path")
 	// ErrNoProjectFound is returned when no project exist at given path
 	ErrNoProjectFound = errors.New("no project exist at given path")
-	// ErrCommandNotFound is returned when given command is not found
-	ErrCommandNotFound = errors.New("no command with the name found")
+	// ErrScriptNotFound is returned when given script is not found
+	ErrScriptNotFound = errors.New("no script with the name found")
 )
 
 // ProjectEntry map a codebase project entry (i.e the project alongside his codebase local path)
@@ -40,9 +41,9 @@ type Codebase interface {
 	Add(remote, path string, config map[string]string) (manifest.Project, error)
 	Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error
 	LocalPath() string
-	Run(command string, writer io.Writer) error
+	Run(scriptName string, writer io.Writer) error
 	BulkGIT(args []string, writer io.Writer) error
-	SetCommand(name, command string, global bool) error
+	SetScript(name string, script []string, global bool) error
 	MoveProject(oldPath, newPath string) error
 	RmProject(path string, delete bool) error
 }
@@ -260,7 +261,7 @@ func (codebase *codebase) LocalPath() string {
 	return codebase.localPath
 }
 
-func (codebase *codebase) Run(command string, writer io.Writer) error {
+func (codebase *codebase) Run(scriptName string, writer io.Writer) error {
 	// Retrieve manifest
 	man, err := codebase.readManifest()
 	if err != nil {
@@ -273,24 +274,34 @@ func (codebase *codebase) Run(command string, writer io.Writer) error {
 		return ErrNoProjectFound
 	}
 
-	// Check if command is defined locally
-	cmdStr, exist := project.Commands[command]
+	// Check if script is defined locally
+	scriptVal, exist := project.Scripts[scriptName]
 	if !exist {
-		return fmt.Errorf("error while running command %s: %w", command, ErrCommandNotFound)
+		return fmt.Errorf("error while running script %s: %w", scriptName, ErrScriptNotFound)
 	}
 
-	// It's a global alias
-	if strings.HasPrefix(cmdStr, "@") {
-		cmdStr, exist = man.Commands[strings.TrimPrefix(cmdStr, "@")]
+	// It's a script alias
+	if len(scriptVal) == 1 && strings.HasPrefix(scriptVal[0], "@") {
+		scriptVal, exist = man.Scripts[strings.TrimPrefix(scriptVal[0], "@")]
 		if !exist {
-			return fmt.Errorf("error while running command %s: %w", command, ErrCommandNotFound)
+			return fmt.Errorf("error while running script %s: %w", scriptName, ErrScriptNotFound)
 		}
 	}
 
-	// Finally execute the command
-	parts := strings.Split(cmdStr, " ")
+	// Finally execute the script
+	file, err := ioutil.TempFile(os.TempDir(), "*")
+	if err != nil {
+		return err
+	}
+	path := file.Name()
 
-	cmd := exec.Command(parts[0], parts[1:]...)
+	defer os.Remove(path)
+
+	if _, err := io.WriteString(file, strings.Join(scriptVal, "\n")); err != nil {
+		return err
+	}
+
+	cmd := exec.Command("sh", path)
 	cmd.Stdout = writer
 	cmd.Stderr = writer
 
@@ -324,26 +335,26 @@ func (codebase *codebase) BulkGIT(args []string, writer io.Writer) error {
 	return nil
 }
 
-func (codebase *codebase) SetCommand(name, command string, global bool) error {
+func (codebase *codebase) SetScript(name string, script []string, global bool) error {
 	man, err := codebase.readManifest()
 	if err != nil {
 		return err
 	}
 
-	// This is a global command
+	// This is a global script
 	if global {
-		if man.Commands == nil {
-			man.Commands = map[string]string{}
+		if man.Scripts == nil {
+			man.Scripts = map[string][]string{}
 		}
 
-		man.Commands[name] = command
+		man.Scripts[name] = script
 
 		if err := codebase.writeManifest(man); err != nil {
 			return err
 		}
 
 		if err := codebase.repo.CommitFiles(
-			fmt.Sprintf("Add command `%s`: `%s`", name, command),
+			fmt.Sprintf("Add global script `%s`", name),
 			manifestFile,
 		); err != nil {
 			return err
@@ -358,11 +369,11 @@ func (codebase *codebase) SetCommand(name, command string, global bool) error {
 		return ErrNoProjectFound
 	}
 
-	if project.Commands == nil {
-		project.Commands = map[string]string{}
+	if project.Scripts == nil {
+		project.Scripts = map[string][]string{}
 	}
 
-	project.Commands[name] = command
+	project.Scripts[name] = script
 	man.Projects[codebase.localPath] = project
 
 	if err := codebase.writeManifest(man); err != nil {
@@ -370,7 +381,7 @@ func (codebase *codebase) SetCommand(name, command string, global bool) error {
 	}
 
 	if err := codebase.repo.CommitFiles(
-		fmt.Sprintf("Add command `%s`: `%s`", name, command),
+		fmt.Sprintf("Add script `%s` to /%s", name, codebase.localPath),
 		manifestFile,
 	); err != nil {
 		return err

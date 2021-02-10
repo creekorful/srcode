@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improve output of bulk-git.
 - [#18](https://github.com/creekorful/srcode/issues/18) set-cmd: edit with $EDITOR if command not directly provided.
 - set-cmd: allow edition of existing command.
+- set-cmd: rename to script.
+- [#19](https://github.com/creekorful/srcode/issues/19) script: now we are making script and not just command.
 
 ## [0.6.0] - 2021-02-09
 

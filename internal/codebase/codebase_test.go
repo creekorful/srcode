@@ -398,19 +398,19 @@ func TestCodebase_Run(t *testing.T) {
 		Return(manifest.Manifest{
 			Projects: map[string]manifest.Project{
 				"test/something": {
-					Commands: map[string]string{
-						"greet-local":    "echo Hello from local command",
-						"greet-global":   "@greet",
-						"invalid-global": "@invalid",
+					Scripts: map[string][]string{
+						"greet-local":    {"echo Hello from local script"},
+						"greet-global":   {"@greet"},
+						"invalid-global": {"@invalid"},
 					},
 				},
 			},
-			Commands: map[string]string{
-				"greet": "echo Hello from global command",
+			Scripts: map[string][]string{
+				"greet": {"echo Hello from global script"},
 			},
 		}, nil)
 
-	// Try to run command from a non-project directory
+	// Try to run script from a non-project directory
 	if err := codebase.Run("greet-local", b); !errors.Is(err, ErrNoProjectFound) {
 		t.Fail()
 	}
@@ -418,28 +418,28 @@ func TestCodebase_Run(t *testing.T) {
 	// CD inside a project
 	codebase.localPath = "test/something"
 
-	// Try to run an non existing local command
-	if err := codebase.Run("blah", b); !errors.Is(err, ErrCommandNotFound) {
+	// Try to run an non existing local script
+	if err := codebase.Run("blah", b); !errors.Is(err, ErrScriptNotFound) {
 		t.Fail()
 	}
 
-	// Try to run an non existing global command
-	if err := codebase.Run("invalid-global", b); !errors.Is(err, ErrCommandNotFound) {
+	// Try to run an non existing global script
+	if err := codebase.Run("invalid-global", b); !errors.Is(err, ErrScriptNotFound) {
 		t.Fail()
 	}
 
-	// Try to run a local command
+	// Try to run a local script
 	b.Reset()
-	if err := codebase.Run("greet-local", b); err != nil || b.String() != "Hello from local command\n" {
+	if err := codebase.Run("greet-local", b); err != nil || b.String() != "Hello from local script\n" {
 		t.Errorf("error: %v", err)
-		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from local command")
+		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from local script")
 	}
 
-	// Try to run a global command
+	// Try to run a global script
 	b.Reset()
-	if err := codebase.Run("greet-global", b); err != nil || b.String() != "Hello from global command\n" {
+	if err := codebase.Run("greet-global", b); err != nil || b.String() != "Hello from global script\n" {
 		t.Errorf("error: %v", err)
-		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from global command")
+		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from global script")
 	}
 }
 
@@ -536,7 +536,7 @@ func TestCodebase_BulkGIT_WithOut(t *testing.T) {
 	}
 }
 
-func TestCodebase_SetCommand(t *testing.T) {
+func TestCodebase_SetScript(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 
@@ -558,7 +558,7 @@ func TestCodebase_SetCommand(t *testing.T) {
 		}, nil)
 
 	// from should should only works with global = true
-	if err := codebase.SetCommand("test", "test", false); !errors.Is(err, ErrNoProjectFound) {
+	if err := codebase.SetScript("test", []string{"test"}, false); !errors.Is(err, ErrNoProjectFound) {
 		t.Fail()
 	}
 
@@ -576,16 +576,16 @@ func TestCodebase_SetCommand(t *testing.T) {
 				Projects: map[string]manifest.Project{
 					"test/something": {},
 				},
-				Commands: map[string]string{
-					"test": "test",
+				Scripts: map[string][]string{
+					"test": {"test"},
 				},
 			}).
 		Return(nil)
 
-	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
+	repoMock.EXPECT().CommitFiles("Add global script `test`", "manifest.json")
 
 	// should works
-	if err := codebase.SetCommand("test", "test", true); err != nil {
+	if err := codebase.SetScript("test", []string{"test"}, true); err != nil {
 		t.Fail()
 	}
 
@@ -605,17 +605,17 @@ func TestCodebase_SetCommand(t *testing.T) {
 			manifest.Manifest{
 				Projects: map[string]manifest.Project{
 					"test/something": {
-						Commands: map[string]string{
-							"test": "test",
+						Scripts: map[string][]string{
+							"test": {"test"},
 						},
 					},
 				},
 			}).
 		Return(nil)
 
-	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
+	repoMock.EXPECT().CommitFiles("Add script `test` to /test/something", "manifest.json")
 
-	if err := codebase.SetCommand("test", "test", false); err != nil {
+	if err := codebase.SetScript("test", []string{"test"}, false); err != nil {
 		t.Fail()
 	}
 
@@ -633,15 +633,15 @@ func TestCodebase_SetCommand(t *testing.T) {
 				Projects: map[string]manifest.Project{
 					"test/something": {},
 				},
-				Commands: map[string]string{
-					"test": "test",
+				Scripts: map[string][]string{
+					"test": {"test"},
 				},
 			}).
 		Return(nil)
 
-	repoMock.EXPECT().CommitFiles("Add command `test`: `test`", "manifest.json")
+	repoMock.EXPECT().CommitFiles("Add global script `test`", "manifest.json")
 
-	if err := codebase.SetCommand("test", "test", true); err != nil {
+	if err := codebase.SetScript("test", []string{"test"}, true); err != nil {
 		t.Fail()
 	}
 }

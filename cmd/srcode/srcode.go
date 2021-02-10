@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -25,9 +26,9 @@ var (
 	errWrongInitUsage       = errors.New("correct usage: srcode init <path>")
 	errWrongCloneUsage      = errors.New("correct usage: srcode clone <remote> [<path>]")
 	errWrongAddProjectUsage = errors.New("correct usage: srcode add <remote> [<path>]")
-	errWrongRunUsage        = errors.New("correct usage: srcode run <command>")
+	errWrongRunUsage        = errors.New("correct usage: srcode run <script>")
 	errWrongBulkGitUsage    = errors.New("correct usage: srcode bulk-git <args>")
-	errWrongSetCmdUsage     = errors.New("correct usage: srcode set-cmd <name> [<command>]")
+	errWrongScriptUsage     = errors.New("correct usage: srcode script <name> [<script>]")
 	errWrongMvUsage         = errors.New("correct usage: srcode mv <src> <dst>")
 	errWrongRmUsage         = errors.New("correct usage: srcode rm <path>")
 )
@@ -149,15 +150,15 @@ Print the codebase working directory - i.e the working directory relative to the
 			},
 			{
 				Name:      "run",
-				Usage:     "Run a codebase command",
-				Action:    app.runCmd,
-				ArgsUsage: "<command>",
+				Usage:     "Run a codebase script",
+				Action:    app.runScript,
+				ArgsUsage: "<script>",
 				Description: `
-Run a command inside a codebase project.
+Run a script inside a codebase project.
 
 Examples
 
-- Execute a command named lint:
+- Execute a script named lint:
   $ srcode run lint
   $ srcode lint`,
 			},
@@ -182,32 +183,32 @@ Examples
   $ srcode bulk-git pull --rebase`,
 			},
 			{
-				Name:      "set-cmd",
-				Usage:     "Add a codebase command",
-				Action:    app.setCmd,
-				ArgsUsage: "<name> [<command>]",
+				Name:      "script",
+				Usage:     "Add a codebase script",
+				Action:    app.setScript,
+				ArgsUsage: "<name> [<script>]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "global",
-						Usage: "If true make the command global",
+						Usage: "If true make the script global",
 					},
 				},
 				Description: `
-Add a command to the codebase, either at global level (--global) or
+Add a script to the codebase, either at global level (--global) or
 at project level.
 
 Examples
 
-- Create a global go-test command:
-  $ srcode set-cmd --global go-test go test -v ./...
+- Create a global go-test script:
+  $ srcode script --global go-test go test -v ./...
 
-- Link a project local test command to the previously defined global alias:
-  $ srcode set-cmd test @go-test
+- Link a project local test script to the previously defined global alias:
+  $ srcode script test @go-test
 
-- Create a project local test command, and edit the command using $EDITOR:
-  $ srcode set-cmd test
+- Create a project local test script, and edit it using $EDITOR:
+  $ srcode script test
 
-Now you can use 'srcode run test' or 'srcode test' to execute the command
+Now you can use 'srcode run test' or 'srcode test' to execute the script
 from project directory.`,
 			},
 			{
@@ -249,7 +250,7 @@ Examples
 			Name:  "Aloïs Micard",
 			Email: "alois@micard.lu",
 		}},
-		Action: app.runCmd, // shortcut: use srcode <command> to execute a codebase command easily
+		Action: app.runScript, // shortcut: use srcode <script> to execute a codebase script easily
 	}
 }
 
@@ -405,7 +406,7 @@ func (app *app) pwd(c *cli.Context) error {
 	return nil
 }
 
-func (app *app) runCmd(c *cli.Context) error {
+func (app *app) runScript(c *cli.Context) error {
 	if !c.Args().Present() {
 		return errWrongRunUsage
 	}
@@ -492,9 +493,9 @@ func (app *app) bulkGit(c *cli.Context) error {
 	return nil
 }
 
-func (app *app) setCmd(c *cli.Context) error {
+func (app *app) setScript(c *cli.Context) error {
 	if c.NArg() < 1 {
-		return errWrongSetCmdUsage
+		return errWrongScriptUsage
 	}
 
 	cb, err := app.openCodebase()
@@ -513,32 +514,32 @@ func (app *app) setCmd(c *cli.Context) error {
 		return codebase.ErrNoProjectFound
 	}
 
-	cmd := ""
+	var script []string
 
 	if c.NArg() >= 2 {
-		// command provided directly trough CLI
-		cmd = strings.Join(c.Args().Tail(), " ")
+		// script provided directly trough CLI
+		script = []string{strings.Join(c.Args().Tail(), " ")}
 	} else {
-		// get previous command definition
-		previousCmd := ""
-		if val, exist := project.Project.Commands[c.Args().First()]; exist {
-			previousCmd = val
+		// get previous script definition
+		var previousScript []string
+		if val, exist := project.Project.Scripts[c.Args().First()]; exist {
+			previousScript = val
 		}
 
 		// otherwise open $EDITOR and read input
-		val, err := captureInputFromEditor(previousCmd)
+		val, err := captureInputFromEditor(previousScript)
 		if err != nil {
 			return err
 		}
 
-		cmd = val
+		script = val
 
-		if cmd == previousCmd || cmd == "" {
+		if reflect.DeepEqual(script, previousScript) || len(script) == 0 {
 			return nil // nothing to do
 		}
 	}
 
-	return cb.SetCommand(c.Args().First(), cmd, c.Bool("global"))
+	return cb.SetScript(c.Args().First(), script, c.Bool("global"))
 }
 
 func (app *app) mvProject(c *cli.Context) error {
@@ -606,24 +607,24 @@ func (app *app) openCodebase() (codebase.Codebase, error) {
 	return cb, nil
 }
 
-func captureInputFromEditor(initialContent string) (string, error) {
+func captureInputFromEditor(initialContent []string) ([]string, error) {
 	file, err := ioutil.TempFile(os.TempDir(), "*")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	path := file.Name()
 
 	defer os.Remove(path)
 
 	// write initial content if any
-	if initialContent != "" {
-		if _, err := io.WriteString(file, initialContent); err != nil {
-			return "", err
+	if len(initialContent) > 0 {
+		if _, err := io.WriteString(file, strings.Join(initialContent, "\n")); err != nil {
+			return nil, err
 		}
 	}
 
 	if err := file.Close(); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// lookup default editor
@@ -639,13 +640,13 @@ func captureInputFromEditor(initialContent string) (string, error) {
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Run(); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return strings.TrimSuffix(string(b), "\n"), nil
+	return strings.Split(strings.TrimSuffix(string(b), "\n"), "\n"), nil
 }

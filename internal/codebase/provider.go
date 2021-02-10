@@ -90,9 +90,9 @@ func (provider *provider) Init(path, remote string, importRepositories bool) (Co
 			}
 
 			man.Projects[strings.TrimPrefix(innerPath, path+"/")] = manifest.Project{
-				Remote:   remote,
-				Config:   nil,
-				Commands: nil,
+				Remote:  remote,
+				Config:  nil,
+				Scripts: nil,
 			}
 
 			return nil
