@@ -9,12 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Changed
 
-- cmd/ls:
+- cmd/ls: add demo message when running `ls` with no projects.
+- change default branch from master to main.
 
 ## Fixed
 
 - cmd/script: allow adding global script even outside project folder.
-- cmd/ls: add demo message when running `ls` with no projects.
 
 ## [0.7.0] - 2021-02-10
 

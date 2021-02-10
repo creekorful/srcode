@@ -235,8 +235,8 @@ func TestCodebase_Sync(t *testing.T) {
 			},
 		}, nil)
 
-	repoMock.EXPECT().Pull("origin", "master").Return(nil)
-	repoMock.EXPECT().Push("origin", "master").Return(nil)
+	repoMock.EXPECT().Pull("origin", "main").Return(nil)
+	repoMock.EXPECT().Push("origin", "main").Return(nil)
 
 	manProviderMock.EXPECT().
 		Read(filepath.Join(dir, metaDir, manifestFile)).
@@ -373,8 +373,8 @@ func TestCodebase_Sync_NoChannel(t *testing.T) {
 			},
 		}, nil)
 
-	repoMock.EXPECT().Pull("origin", "master").Return(nil)
-	repoMock.EXPECT().Push("origin", "master").Return(nil)
+	repoMock.EXPECT().Pull("origin", "main").Return(nil)
+	repoMock.EXPECT().Push("origin", "main").Return(nil)
 
 	manProviderMock.EXPECT().
 		Read(filepath.Join(dir, metaDir, manifestFile)).

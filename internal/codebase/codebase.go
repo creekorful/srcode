@@ -158,9 +158,9 @@ func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, delet
 
 	// pull & push
 	// Allow to fail because may fail if not already pushed (todo better)
-	_ = codebase.repo.Pull("origin", "master")
+	_ = codebase.repo.Pull("origin", "main")
 
-	if err := codebase.repo.Push("origin", "master"); err != nil {
+	if err := codebase.repo.Push("origin", "main"); err != nil {
 		return err
 	}
 
