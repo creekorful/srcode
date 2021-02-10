@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/creekorful/srcode/internal/codebase"
+	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/fatih/color"
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
@@ -31,6 +32,7 @@ var (
 	errWrongScriptUsage     = errors.New("correct usage: srcode script <name> [<script>]")
 	errWrongMvUsage         = errors.New("correct usage: srcode mv <src> <dst>")
 	errWrongRmUsage         = errors.New("correct usage: srcode rm <path>")
+	errWrongHookUsage       = errors.New("correct usage: srcode hook <script>")
 )
 
 func main() {
@@ -244,6 +246,20 @@ Examples
 
 - Remove a project located at Contributing/Test and remove from disk too:
   $ srcode rm --delete Contributing/Test`,
+			},
+			{
+				Name:      "hook",
+				Usage:     "Set project Git hook",
+				Action:    app.hook,
+				ArgsUsage: "<script>",
+				Description: `
+Set the Git hook of current project. This will lookup for the script with
+given name, and copy the content to the .git/hooks folder.
+
+Examples
+
+- Set Git hook of current project:
+  $ srcode hook lint`,
 			},
 		},
 		Authors: []*cli.Author{{
@@ -511,7 +527,7 @@ func (app *app) setScript(c *cli.Context) error {
 
 	project, exist := projects[cb.LocalPath()]
 	if !exist {
-		return codebase.ErrNoProjectFound
+		return manifest.ErrNoProjectFound
 	}
 
 	var script []string
@@ -580,17 +596,23 @@ func (app *app) rmProject(c *cli.Context) error {
 	return nil
 }
 
-func parseGitConfig(args []string) map[string]string {
-	config := map[string]string{}
-
-	for _, arg := range args {
-		parts := strings.Split(arg, "=")
-		if len(parts) == 2 {
-			config[parts[0]] = parts[1]
-		}
+func (app *app) hook(c *cli.Context) error {
+	if c.NArg() != 1 {
+		return errWrongHookUsage
 	}
 
-	return config
+	cb, err := app.openCodebase()
+	if err != nil {
+		return err
+	}
+
+	if err := cb.SetHook(c.Args().First()); err != nil {
+		return err
+	}
+
+	_, _ = fmt.Fprintf(app.writer, "Successfully applied hook `%s` to /%s\n", c.Args().First(), cb.LocalPath())
+
+	return nil
 }
 
 func (app *app) openCodebase() (codebase.Codebase, error) {
@@ -605,6 +627,19 @@ func (app *app) openCodebase() (codebase.Codebase, error) {
 	}
 
 	return cb, nil
+}
+
+func parseGitConfig(args []string) map[string]string {
+	config := map[string]string{}
+
+	for _, arg := range args {
+		parts := strings.Split(arg, "=")
+		if len(parts) == 2 {
+			config[parts[0]] = parts[1]
+		}
+	}
+
+	return config
 }
 
 func captureInputFromEditor(initialContent []string) ([]string, error) {

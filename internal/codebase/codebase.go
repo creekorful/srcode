@@ -21,10 +21,6 @@ import (
 var (
 	// ErrPathTaken is returned when a project already exist at given path
 	ErrPathTaken = errors.New("a project already exist at given path")
-	// ErrNoProjectFound is returned when no project exist at given path
-	ErrNoProjectFound = errors.New("no project exist at given path")
-	// ErrScriptNotFound is returned when given script is not found
-	ErrScriptNotFound = errors.New("no script with the name found")
 )
 
 // ProjectEntry map a codebase project entry (i.e the project alongside his codebase local path)
@@ -46,6 +42,7 @@ type Codebase interface {
 	SetScript(name string, script []string, global bool) error
 	MoveProject(oldPath, newPath string) error
 	RmProject(path string, delete bool) error
+	SetHook(scriptName string) error
 }
 
 type codebase struct {
@@ -219,6 +216,23 @@ func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, delet
 					}
 				}
 
+				// Apply hook if any
+				if project.Hook != "" {
+					script, err := man.GetScript(p, project.Hook)
+					if err == nil {
+						f, err := os.OpenFile(filepath.Join(codebase.rootPath, p, ".git", "hooks", "pre-commit"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
+						if err != nil {
+							return err
+						}
+						defer f.Close()
+
+						// write the content
+						if _, err := io.WriteString(f, strings.Join(script, "\n")); err != nil {
+							return err
+						}
+					}
+				}
+
 				return nil
 			})
 		}
@@ -262,30 +276,14 @@ func (codebase *codebase) LocalPath() string {
 }
 
 func (codebase *codebase) Run(scriptName string, writer io.Writer) error {
-	// Retrieve manifest
 	man, err := codebase.readManifest()
 	if err != nil {
 		return err
 	}
 
-	// Fails if we are not in a project directory
-	project, exist := man.Projects[codebase.localPath]
-	if !exist {
-		return ErrNoProjectFound
-	}
-
-	// Check if script is defined locally
-	scriptVal, exist := project.Scripts[scriptName]
-	if !exist {
-		return fmt.Errorf("error while running script %s: %w", scriptName, ErrScriptNotFound)
-	}
-
-	// It's a script alias
-	if len(scriptVal) == 1 && strings.HasPrefix(scriptVal[0], "@") {
-		scriptVal, exist = man.Scripts[strings.TrimPrefix(scriptVal[0], "@")]
-		if !exist {
-			return fmt.Errorf("error while running script %s: %w", scriptName, ErrScriptNotFound)
-		}
+	scriptVal, err := man.GetScript(codebase.localPath, scriptName)
+	if err != nil {
+		return fmt.Errorf("error while running script %s: %w", scriptName, err)
 	}
 
 	// Finally execute the script
@@ -366,7 +364,7 @@ func (codebase *codebase) SetScript(name string, script []string, global bool) e
 	project, exist := man.Projects[codebase.localPath]
 
 	if !exist {
-		return ErrNoProjectFound
+		return manifest.ErrNoProjectFound
 	}
 
 	if project.Scripts == nil {
@@ -400,7 +398,7 @@ func (codebase *codebase) MoveProject(oldPath, newPath string) error {
 	newPath = filepath.Join(codebase.localPath, newPath)
 
 	if _, exist := man.Projects[oldPath]; !exist {
-		return ErrNoProjectFound
+		return manifest.ErrNoProjectFound
 	}
 
 	if _, exist := man.Projects[newPath]; exist {
@@ -448,7 +446,7 @@ func (codebase *codebase) RmProject(path string, shouldDelete bool) error {
 	path = filepath.Join(codebase.localPath, path)
 
 	if _, exist := man.Projects[path]; !exist {
-		return ErrNoProjectFound
+		return manifest.ErrNoProjectFound
 	}
 
 	delete(man.Projects, path)
@@ -465,6 +463,49 @@ func (codebase *codebase) RmProject(path string, shouldDelete bool) error {
 		if err := os.RemoveAll(filepath.Join(codebase.rootPath, path)); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (codebase *codebase) SetHook(scriptName string) error {
+	man, err := codebase.readManifest()
+	if err != nil {
+		return err
+	}
+
+	script, err := man.GetScript(codebase.localPath, scriptName)
+	if err != nil {
+		return fmt.Errorf("error while setting hook %s: %w", scriptName, err)
+	}
+
+	// copy the script to .git/hooks directory
+	f, err := os.OpenFile(filepath.Join(codebase.rootPath, codebase.localPath, ".git", "hooks", "pre-commit"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	// write the content
+	if _, err := io.WriteString(f, strings.Join(script, "\n")); err != nil {
+		return err
+	}
+
+	// Update the manifest
+	project, exists := man.Projects[codebase.localPath]
+	if !exists {
+		return manifest.ErrNoProjectFound // should not happen there
+	}
+	project.Hook = scriptName
+	man.Projects[codebase.localPath] = project
+
+	if err := codebase.writeManifest(man); err != nil {
+		return err
+	}
+
+	// Commit the changes
+	if err := codebase.repo.CommitFiles(fmt.Sprintf("Set pre-commit hook `%s` for %s", scriptName, codebase.localPath), manifestFile); err != nil {
+		return err
 	}
 
 	return nil

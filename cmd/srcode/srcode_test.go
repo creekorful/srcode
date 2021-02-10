@@ -490,7 +490,7 @@ func TestSetCmd(t *testing.T) {
 	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{}, nil)
 	codebaseMock.EXPECT().LocalPath().Return("test-12")
 
-	if err := app.getCliApp().Run([]string{"srcode", "script", "test", "@go-test"}); !errors.Is(err, codebase.ErrNoProjectFound) {
+	if err := app.getCliApp().Run([]string{"srcode", "script", "test", "@go-test"}); !errors.Is(err, manifest.ErrNoProjectFound) {
 		t.Fail()
 	}
 
@@ -593,6 +593,42 @@ func TestRmProject(t *testing.T) {
 	}
 
 	if b.String() != "Successfully deleted Contributing/Test\n" {
+		t.Fail()
+	}
+}
+
+func TestHook(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	codebaseProviderMock := codebase_mock.NewMockProvider(mockCtrl)
+
+	b := &strings.Builder{}
+
+	app := app{
+		codebaseProvider: codebaseProviderMock,
+		writer:           b,
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.FailNow()
+	}
+
+	// test with no enough args should fails
+	if err := app.getCliApp().Run([]string{"srcode", "hook"}); err != errWrongHookUsage {
+		t.Errorf("got %v want %v", err, errWrongHookUsage)
+	}
+
+	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
+	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+	codebaseMock.EXPECT().SetHook("lint").Return(nil)
+	codebaseMock.EXPECT().LocalPath().Return("Contributing/Test")
+	if err := app.getCliApp().Run([]string{"srcode", "hook", "lint"}); err != nil {
+		t.Fail()
+	}
+
+	if b.String() != "Successfully applied hook `lint` to /Contributing/Test\n" {
 		t.Fail()
 	}
 }

@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - set-cmd: allow edition of existing command.
 - set-cmd: rename to script.
 - [#19](https://github.com/creekorful/srcode/issues/19) script: now we are making script and not just command.
+- [#20](https://github.com/creekorful/srcode/issues/20) add git hook support.
 
 ## [0.6.0] - 2021-02-09
 
