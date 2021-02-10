@@ -8,7 +8,9 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/urfave/cli/v2"
 	"io"
+	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -25,7 +27,7 @@ var (
 	errWrongAddProjectUsage = errors.New("correct usage: srcode add <remote> [<path>]")
 	errWrongRunUsage        = errors.New("correct usage: srcode run <command>")
 	errWrongBulkGitUsage    = errors.New("correct usage: srcode bulk-git <args>")
-	errWrongSetCmdUsage     = errors.New("correct usage: srcode set-cmd <name> <command>")
+	errWrongSetCmdUsage     = errors.New("correct usage: srcode set-cmd <name> [<command>]")
 	errWrongMvUsage         = errors.New("correct usage: srcode mv <src> <dst>")
 	errWrongRmUsage         = errors.New("correct usage: srcode rm <path>")
 )
@@ -183,7 +185,7 @@ Examples
 				Name:      "set-cmd",
 				Usage:     "Add a codebase command",
 				Action:    app.setCmd,
-				ArgsUsage: "<name> <command>",
+				ArgsUsage: "<name> [<command>]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "global",
@@ -201,6 +203,9 @@ Examples
 
 - Link a project local test command to the previously defined global alias:
   $ srcode set-cmd test @go-test
+
+- Create a project local test command, and edit the command using $EDITOR:
+  $ srcode set-cmd test
 
 Now you can use 'srcode run test' or 'srcode test' to execute the command
 from project directory.`,
@@ -488,7 +493,7 @@ func (app *app) bulkGit(c *cli.Context) error {
 }
 
 func (app *app) setCmd(c *cli.Context) error {
-	if c.NArg() < 2 {
+	if c.NArg() < 1 {
 		return errWrongSetCmdUsage
 	}
 
@@ -497,7 +502,31 @@ func (app *app) setCmd(c *cli.Context) error {
 		return err
 	}
 
-	return cb.SetCommand(c.Args().First(), strings.Join(c.Args().Tail(), " "), c.Bool("global"))
+	// Make sure there's a project at current path
+	projects, err := cb.Projects()
+	if err != nil {
+		return err
+	}
+	if _, exist := projects[cb.LocalPath()]; !exist {
+		return codebase.ErrNoProjectFound
+	}
+
+	cmd := ""
+
+	if c.NArg() >= 2 {
+		// command provided directly trough CLI
+		cmd = strings.Join(c.Args().Tail(), " ")
+	} else {
+		// otherwise open $EDITOR and read input
+		val, err := captureInputFromEditor()
+		if err != nil {
+			return err
+		}
+
+		cmd = val
+	}
+
+	return cb.SetCommand(c.Args().First(), cmd, c.Bool("global"))
 }
 
 func (app *app) mvProject(c *cli.Context) error {
@@ -535,7 +564,7 @@ func (app *app) rmProject(c *cli.Context) error {
 
 	_, _ = fmt.Fprintf(app.writer, "Successfully deleted %s\n", c.Args().First())
 
-	return nil // TODO
+	return nil
 }
 
 func parseGitConfig(args []string) map[string]string {
@@ -563,4 +592,41 @@ func (app *app) openCodebase() (codebase.Codebase, error) {
 	}
 
 	return cb, nil
+}
+
+func captureInputFromEditor() (string, error) {
+	file, err := ioutil.TempFile(os.TempDir(), "*")
+	if err != nil {
+		return "", err
+	}
+	path := file.Name()
+
+	defer os.Remove(path)
+
+	if err := file.Close(); err != nil {
+		return "", err
+	}
+
+	// lookup default editor
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vim" // ;D
+	}
+
+	// open the editor on the temporary file
+	cmd := exec.Command(editor, path)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return "", err
+	}
+
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSuffix(string(b), "\n"), nil
 }

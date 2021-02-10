@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/creekorful/srcode/internal/codebase"
 	"github.com/creekorful/srcode/internal/codebase_mock"
@@ -481,14 +482,22 @@ func TestSetCmd(t *testing.T) {
 	if err := app.getCliApp().Run([]string{"srcode", "set-cmd"}); err != errWrongSetCmdUsage {
 		t.Errorf("got %v want %v", err, errWrongSetCmdUsage)
 	}
-	if err := app.getCliApp().Run([]string{"srcode", "set-cmd", "test"}); err != errWrongSetCmdUsage {
-		t.Errorf("got %v want %v", err, errWrongSetCmdUsage)
-	}
 
 	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
 
+	// test no project in current directory
+	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{}, nil)
+	codebaseMock.EXPECT().LocalPath().Return("test-12")
+
+	if err := app.getCliApp().Run([]string{"srcode", "set-cmd", "test", "@go-test"}); !errors.Is(err, codebase.ErrNoProjectFound) {
+		t.Fail()
+	}
+
 	// test set local command
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{"test-12": {}}, nil)
+	codebaseMock.EXPECT().LocalPath().Return("test-12")
 	codebaseMock.EXPECT().SetCommand("test", "@go-test", false)
 
 	if err := app.getCliApp().Run([]string{"srcode", "set-cmd", "test", "@go-test"}); err != nil {
@@ -497,6 +506,8 @@ func TestSetCmd(t *testing.T) {
 
 	// test set global command
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{"test-42": {}}, nil)
+	codebaseMock.EXPECT().LocalPath().Return("test-42")
 	codebaseMock.EXPECT().SetCommand("go-test", "go test -race -v ./...", true)
 
 	if err := app.getCliApp().Run([]string{"srcode", "set-cmd", "--global", "go-test", "go", "test", "-race", "-v", "./..."}); err != nil {

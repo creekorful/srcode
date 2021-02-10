@@ -456,7 +456,7 @@ func (codebase *codebase) RmProject(path string, shouldDelete bool) error {
 		}
 	}
 
-	return nil // TODO
+	return nil
 }
 
 func (codebase *codebase) readManifest() (manifest.Manifest, error) {

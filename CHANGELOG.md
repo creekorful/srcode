@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Changed
 
 - Improve output of bulk-git.
+- [#18](https://github.com/creekorful/srcode/issues/18) set-cmd: edit with $EDITOR if command not directly provided.
 
 ## [0.6.0] - 2021-02-09
 
