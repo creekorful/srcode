@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -1096,5 +1097,28 @@ func TestCodebase_SetHook(t *testing.T) {
 	}
 	if string(b) != "#/bin/sh\necho hello from global" {
 		t.Fatal()
+	}
+}
+
+func TestCodebase_Manifest(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+
+	manProviderMock := manifest_mock.NewMockProvider(mockCtrl)
+
+	codebase := &codebase{
+		manProvider: manProviderMock,
+		rootPath:    "/tmp/test",
+	}
+
+	val := manifest.Manifest{
+		Projects: map[string]manifest.Project{"test": {}},
+	}
+
+	manProviderMock.EXPECT().Read(filepath.Join("/", "tmp", "test", metaDir, manifestFile)).
+		Return(val, nil)
+
+	if res, err := codebase.Manifest(); err != nil || !reflect.DeepEqual(res, val) {
+		t.Fail()
 	}
 }

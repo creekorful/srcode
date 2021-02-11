@@ -506,7 +506,7 @@ func TestScript(t *testing.T) {
 
 	// test no project in current directory
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
-	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{}, nil)
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{}, nil)
 	codebaseMock.EXPECT().LocalPath().Return("test-12")
 
 	if err := app.getCliApp().Run([]string{"srcode", "script", "test", "@go-test"}); !errors.Is(err, manifest.ErrNoProjectFound) {
@@ -515,7 +515,7 @@ func TestScript(t *testing.T) {
 
 	// test set local command
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
-	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{"test-12": {}}, nil)
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{Projects: map[string]manifest.Project{"test-12": {}}}, nil)
 	codebaseMock.EXPECT().LocalPath().Return("test-12")
 	codebaseMock.EXPECT().SetScript("test", []string{"@go-test"}, false)
 
@@ -525,7 +525,7 @@ func TestScript(t *testing.T) {
 
 	// test set global command
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
-	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{"test-42": {}}, nil)
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{Projects: map[string]manifest.Project{"test-42": {}}}, nil)
 	codebaseMock.EXPECT().LocalPath().Return("")
 	codebaseMock.EXPECT().SetScript("go-test", []string{"go test -race -v ./..."}, true)
 

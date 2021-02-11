@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Fixed
 
 - cmd/script: allow adding global script even outside project folder.
+- [#22](https://github.com/creekorful/srcode/issues/22) cmd/script: edition of global script does not set previous content in $EDITOR.
 
 ## [0.7.0] - 2021-02-10
 

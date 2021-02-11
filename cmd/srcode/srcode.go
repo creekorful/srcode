@@ -515,19 +515,22 @@ func (app *app) setScript(c *cli.Context) error {
 		return errWrongScriptUsage
 	}
 
+	isGlobal := c.Bool("global")
+
 	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
 
-	projects, err := cb.Projects()
+	man, err := cb.Manifest()
 	if err != nil {
 		return err
 	}
-	project, exist := projects[cb.LocalPath()]
+
+	project, exist := man.Projects[cb.LocalPath()]
 
 	// Make sure there's a project at current path (if adding local script)
-	if !exist && !c.Bool("global") {
+	if !exist && !isGlobal {
 		return manifest.ErrNoProjectFound
 	}
 
@@ -539,8 +542,11 @@ func (app *app) setScript(c *cli.Context) error {
 	} else {
 		// get previous script definition
 		var previousScript []string
-		if val, exist := project.Project.Scripts[c.Args().First()]; exist {
-			previousScript = val
+
+		if isGlobal {
+			previousScript = man.Scripts[c.Args().First()]
+		} else {
+			previousScript = project.Scripts[c.Args().First()]
 		}
 
 		// otherwise open $EDITOR and read input
@@ -556,7 +562,7 @@ func (app *app) setScript(c *cli.Context) error {
 		}
 	}
 
-	return cb.SetScript(c.Args().First(), script, c.Bool("global"))
+	return cb.SetScript(c.Args().First(), script, isGlobal)
 }
 
 func (app *app) mvProject(c *cli.Context) error {
