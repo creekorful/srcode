@@ -434,7 +434,7 @@ func (app *app) runScript(c *cli.Context) error {
 		return err
 	}
 
-	return cb.Run(c.Args().First(), app.writer)
+	return cb.Run(c.Args().First(), c.Args().Tail(), app.writer)
 }
 
 func (app *app) lsProjects(c *cli.Context) error {

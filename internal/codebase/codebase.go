@@ -38,7 +38,7 @@ type Codebase interface {
 	Add(remote, path string, config map[string]string) (manifest.Project, error)
 	Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error
 	LocalPath() string
-	Run(scriptName string, writer io.Writer) error
+	Run(scriptName string, args []string, writer io.Writer) error
 	BulkGIT(args []string, writer io.Writer) error
 	SetScript(name string, script []string, global bool) error
 	MoveProject(oldPath, newPath string) error
@@ -280,7 +280,7 @@ func (codebase *codebase) LocalPath() string {
 	return codebase.localPath
 }
 
-func (codebase *codebase) Run(scriptName string, writer io.Writer) error {
+func (codebase *codebase) Run(scriptName string, args []string, writer io.Writer) error {
 	man, err := codebase.readManifest()
 	if err != nil {
 		return err
@@ -304,7 +304,10 @@ func (codebase *codebase) Run(scriptName string, writer io.Writer) error {
 		return err
 	}
 
-	cmd := exec.Command("sh", path)
+	cmdArgs := []string{path}
+	cmdArgs = append(cmdArgs, args...)
+
+	cmd := exec.Command("sh", cmdArgs...)
 	cmd.Stdout = writer
 	cmd.Stderr = writer
 

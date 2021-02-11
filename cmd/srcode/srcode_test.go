@@ -348,11 +348,11 @@ func TestRunScript(t *testing.T) {
 	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 
-	codebaseMock.EXPECT().Run("test", b).
-		Do(func(command string, writer io.Writer) { _, _ = io.WriteString(writer, "test 42\n") }).
+	codebaseMock.EXPECT().Run("test", []string{"."}, b).
+		Do(func(command string, args []string, writer io.Writer) { _, _ = io.WriteString(writer, "test 42\n") }).
 		Return(nil)
 
-	if err := app.getCliApp().Run([]string{"srcode", "run", "test"}); err != nil {
+	if err := app.getCliApp().Run([]string{"srcode", "run", "test", "."}); err != nil {
 		t.Fail()
 	}
 	if b.String() != "test 42\n" {

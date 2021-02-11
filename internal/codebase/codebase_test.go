@@ -430,7 +430,7 @@ func TestCodebase_Run(t *testing.T) {
 
 	manProviderMock.EXPECT().
 		Read(filepath.Join("test-dir", metaDir, manifestFile)).
-		Times(5).
+		Times(6).
 		Return(manifest.Manifest{
 			Projects: map[string]manifest.Project{
 				"test/something": {
@@ -438,16 +438,18 @@ func TestCodebase_Run(t *testing.T) {
 						"greet-local":    {"echo Hello from local script"},
 						"greet-global":   {"@greet"},
 						"invalid-global": {"@invalid"},
+						"greet-custom":   {"@greet-custom"},
 					},
 				},
 			},
 			Scripts: map[string][]string{
-				"greet": {"echo Hello from global script"},
+				"greet":        {"echo Hello from global script"},
+				"greet-custom": {"echo Hello $2 $1"},
 			},
 		}, nil)
 
 	// Try to run script from a non-project directory
-	if err := codebase.Run("greet-local", b); !errors.Is(err, manifest.ErrNoProjectFound) {
+	if err := codebase.Run("greet-local", nil, b); !errors.Is(err, manifest.ErrNoProjectFound) {
 		t.Fail()
 	}
 
@@ -455,27 +457,34 @@ func TestCodebase_Run(t *testing.T) {
 	codebase.localPath = "test/something"
 
 	// Try to run an non existing local script
-	if err := codebase.Run("blah", b); !errors.Is(err, manifest.ErrScriptNotFound) {
+	if err := codebase.Run("blah", nil, b); !errors.Is(err, manifest.ErrScriptNotFound) {
 		t.Fail()
 	}
 
 	// Try to run an non existing global script
-	if err := codebase.Run("invalid-global", b); !errors.Is(err, manifest.ErrScriptNotFound) {
+	if err := codebase.Run("invalid-global", nil, b); !errors.Is(err, manifest.ErrScriptNotFound) {
 		t.Fail()
 	}
 
 	// Try to run a local script
 	b.Reset()
-	if err := codebase.Run("greet-local", b); err != nil || b.String() != "Hello from local script\n" {
+	if err := codebase.Run("greet-local", nil, b); err != nil || b.String() != "Hello from local script\n" {
 		t.Errorf("error: %v", err)
 		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from local script")
 	}
 
 	// Try to run a global script
 	b.Reset()
-	if err := codebase.Run("greet-global", b); err != nil || b.String() != "Hello from global script\n" {
+	if err := codebase.Run("greet-global", nil, b); err != nil || b.String() != "Hello from global script\n" {
 		t.Errorf("error: %v", err)
 		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from global script")
+	}
+
+	// Try to run a global custom script
+	b.Reset()
+	if err := codebase.Run("greet-custom", []string{"param1", "param2"}, b); err != nil || b.String() != "Hello param2 param1\n" {
+		t.Errorf("error: %v", err)
+		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello param2 param1")
 	}
 }
 
