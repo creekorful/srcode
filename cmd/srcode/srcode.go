@@ -29,7 +29,6 @@ var (
 	errWrongAddProjectUsage = errors.New("correct usage: srcode add <remote> [<path>]")
 	errWrongRunUsage        = errors.New("correct usage: srcode run <script>")
 	errWrongBulkGitUsage    = errors.New("correct usage: srcode bulk-git <args>")
-	errWrongScriptUsage     = errors.New("correct usage: srcode script <name> [<script>]")
 	errWrongMvUsage         = errors.New("correct usage: srcode mv <src> <dst>")
 	errWrongRmUsage         = errors.New("correct usage: srcode rm <path>")
 	errWrongHookUsage       = errors.New("correct usage: srcode hook <script>")
@@ -186,9 +185,9 @@ Examples
 			},
 			{
 				Name:      "script",
-				Usage:     "Add a codebase script",
-				Action:    app.setScript,
-				ArgsUsage: "<name> [<script>]",
+				Usage:     "Interact with the codebase scripts",
+				Action:    app.script,
+				ArgsUsage: "[<name>] [<script>]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "global",
@@ -196,8 +195,8 @@ Examples
 					},
 				},
 				Description: `
-Add a script to the codebase, either at global level (--global) or
-at project level.
+Interact with the codebase scripts, either display the existing ones,
+or add new one at global level (--global) or at project level.
 
 Examples
 
@@ -209,6 +208,9 @@ Examples
 
 - Create a project local test script, and edit it using $EDITOR:
   $ srcode script test
+
+- List the existing scripts:
+  $ srcode script
 
 Now you can use 'srcode run test' or 'srcode test' to execute the script
 from project directory.`,
@@ -510,13 +512,7 @@ func (app *app) bulkGit(c *cli.Context) error {
 	return nil
 }
 
-func (app *app) setScript(c *cli.Context) error {
-	if c.NArg() < 1 {
-		return errWrongScriptUsage
-	}
-
-	isGlobal := c.Bool("global")
-
+func (app *app) script(c *cli.Context) error {
 	cb, err := app.openCodebase()
 	if err != nil {
 		return err
@@ -528,6 +524,39 @@ func (app *app) setScript(c *cli.Context) error {
 	}
 
 	project, exist := man.Projects[cb.LocalPath()]
+
+	// Running script with no arguments will display the existing ones
+	if c.NArg() == 0 {
+		hasScripts := false
+
+		if len(man.Scripts) > 0 {
+			hasScripts = true
+			scripts := getKeys(man.Scripts)
+			_, _ = fmt.Fprintf(app.writer, "available global scripts:\t%s %s %s\n",
+				color.HiWhiteString("["),
+				strings.Join(scripts, ", "),
+				color.HiWhiteString("]"))
+		}
+
+		if exist {
+			if len(project.Scripts) > 0 {
+				hasScripts = true
+				scripts := getKeys(project.Scripts)
+				_, _ = fmt.Fprintf(app.writer, "available local scripts:\t%s %s %s\n",
+					color.HiWhiteString("["),
+					strings.Join(scripts, ", "),
+					color.HiWhiteString("]"))
+			}
+		}
+
+		if !hasScripts {
+			_, _ = fmt.Fprintln(app.writer, "No scripts in codebase")
+		}
+
+		return nil
+	}
+
+	isGlobal := c.Bool("global")
 
 	// Make sure there's a project at current path (if adding local script)
 	if !exist && !isGlobal {
@@ -691,4 +720,15 @@ func captureInputFromEditor(initialContent []string) ([]string, error) {
 	}
 
 	return strings.Split(strings.TrimSuffix(string(b), "\n"), "\n"), nil
+}
+
+func getKeys(v map[string][]string) []string {
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	return keys
 }

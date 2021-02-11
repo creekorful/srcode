@@ -488,8 +488,11 @@ func TestScript(t *testing.T) {
 
 	codebaseProviderMock := codebase_mock.NewMockProvider(mockCtrl)
 
+	b := &strings.Builder{}
+
 	app := app{
 		codebaseProvider: codebaseProviderMock,
+		writer:           b,
 	}
 
 	cwd, err := os.Getwd()
@@ -497,12 +500,21 @@ func TestScript(t *testing.T) {
 		t.FailNow()
 	}
 
-	// test with no enough args should fails
-	if err := app.getCliApp().Run([]string{"srcode", "script"}); err != errWrongScriptUsage {
-		t.Errorf("got %v want %v", err, errWrongScriptUsage)
+	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
+
+	// test no project in current directory
+	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{}, nil)
+	codebaseMock.EXPECT().LocalPath().Return("test-12")
+
+	// test script with no args should print existing scripts
+	if err := app.getCliApp().Run([]string{"srcode", "script"}); err != nil {
+		t.Fail()
 	}
 
-	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
+	if b.String() != "No scripts in codebase\n" {
+		t.Fail()
+	}
 
 	// test no project in current directory
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
@@ -530,6 +542,34 @@ func TestScript(t *testing.T) {
 	codebaseMock.EXPECT().SetScript("go-test", []string{"go test -race -v ./..."}, true)
 
 	if err := app.getCliApp().Run([]string{"srcode", "script", "--global", "go-test", "go", "test", "-race", "-v", "./..."}); err != nil {
+		t.Fail()
+	}
+
+	// test display commands
+	b.Reset()
+
+	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{
+		Projects: map[string]manifest.Project{"test-42": {Scripts: map[string][]string{"gen": {"@go-gen"}}}},
+		Scripts:  map[string][]string{"go-generate": {"go generate -v ./..."}},
+	}, nil)
+	codebaseMock.EXPECT().LocalPath().Return("test-42")
+
+	if err := app.getCliApp().Run([]string{"srcode", "script"}); err != nil {
+		t.Fail()
+	}
+
+	val := b.String()
+	if !strings.Contains(val, "available global scripts") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "go-generate") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "available local scripts") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "gen") {
 		t.Fail()
 	}
 }

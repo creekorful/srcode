@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - cmd/ls: add demo message when running `ls` with no projects.
 - change default branch from master to main.
+- cmd/script: display available scripts when running with no arguments.
 
 ## Fixed
 
