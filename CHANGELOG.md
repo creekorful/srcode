@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Changed
 
 - cmd/script: allow executing script with arguments.
+- cmd/hook: install hook as pre-push rather than pre-commit.
 
 ## [0.7.1] - 2021-02-11
 

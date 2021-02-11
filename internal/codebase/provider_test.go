@@ -388,7 +388,7 @@ func TestProvider_Clone(t *testing.T) {
 	}
 
 	// make sure hook is copied
-	b, err := ioutil.ReadFile(filepath.Join(targetDir, "test", "12", ".git", "hooks", "pre-commit"))
+	b, err := ioutil.ReadFile(filepath.Join(targetDir, "test", "12", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Fail()
 	}
@@ -397,7 +397,7 @@ func TestProvider_Clone(t *testing.T) {
 	}
 
 	// make sure hook is copied
-	b, err = ioutil.ReadFile(filepath.Join(targetDir, "test-another", ".git", "hooks", "pre-commit"))
+	b, err = ioutil.ReadFile(filepath.Join(targetDir, "test-another", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Fail()
 	}

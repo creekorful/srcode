@@ -238,7 +238,7 @@ func (provider *provider) Clone(url, path string, ch chan<- ProjectEntry) (Codeb
 			if project.Hook != "" {
 				script, err := man.GetScript(projectPath, project.Hook)
 				if err == nil {
-					f, err := os.OpenFile(filepath.Join(codebase.rootPath, projectPath, ".git", "hooks", "pre-commit"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
+					f, err := os.OpenFile(filepath.Join(codebase.rootPath, projectPath, ".git", "hooks", "pre-push"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
 					if err != nil {
 						return err
 					}

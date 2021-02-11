@@ -225,7 +225,7 @@ func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, delet
 				if project.Hook != "" {
 					script, err := man.GetScript(p, project.Hook)
 					if err == nil {
-						f, err := os.OpenFile(filepath.Join(codebase.rootPath, p, ".git", "hooks", "pre-commit"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
+						f, err := os.OpenFile(filepath.Join(codebase.rootPath, p, ".git", "hooks", "pre-push"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
 						if err != nil {
 							return err
 						}
@@ -488,7 +488,7 @@ func (codebase *codebase) SetHook(scriptName string) error {
 	}
 
 	// copy the script to .git/hooks directory
-	f, err := os.OpenFile(filepath.Join(codebase.rootPath, codebase.localPath, ".git", "hooks", "pre-commit"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
+	f, err := os.OpenFile(filepath.Join(codebase.rootPath, codebase.localPath, ".git", "hooks", "pre-push"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
 	if err != nil {
 		return err
 	}
@@ -512,7 +512,7 @@ func (codebase *codebase) SetHook(scriptName string) error {
 	}
 
 	// Commit the changes
-	if err := codebase.repo.CommitFiles(fmt.Sprintf("Set pre-commit hook `%s` for %s", scriptName, codebase.localPath), manifestFile); err != nil {
+	if err := codebase.repo.CommitFiles(fmt.Sprintf("Set pre-push hook `%s` for %s", scriptName, codebase.localPath), manifestFile); err != nil {
 		return err
 	}
 

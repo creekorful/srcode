@@ -320,7 +320,7 @@ func TestCodebase_Sync(t *testing.T) {
 	}
 
 	// make sure hook is copied
-	b, err := ioutil.ReadFile(filepath.Join(dir, "test-12", ".git", "hooks", "pre-commit"))
+	b, err := ioutil.ReadFile(filepath.Join(dir, "test-12", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -329,7 +329,7 @@ func TestCodebase_Sync(t *testing.T) {
 	}
 
 	// make sure hook is copied
-	b, err = ioutil.ReadFile(filepath.Join(dir, "test", "c", "d", ".git", "hooks", "pre-commit"))
+	b, err = ioutil.ReadFile(filepath.Join(dir, "test", "c", "d", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -1041,11 +1041,11 @@ func TestCodebase_SetHook(t *testing.T) {
 			"global-42": {"#/bin/sh", "echo hello from global"},
 		},
 	})
-	repoMock.EXPECT().CommitFiles("Set pre-commit hook `test-12` for test/something-1", manifestFile)
+	repoMock.EXPECT().CommitFiles("Set pre-push hook `test-12` for test/something-1", manifestFile)
 	if err := codebase.SetHook("test-12"); err != nil {
 		t.Fail()
 	}
-	b, err := ioutil.ReadFile(filepath.Join(path, "test", "something-1", ".git", "hooks", "pre-commit"))
+	b, err := ioutil.ReadFile(filepath.Join(path, "test", "something-1", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Fail()
 	}
@@ -1096,11 +1096,11 @@ func TestCodebase_SetHook(t *testing.T) {
 			"global-42": {"#/bin/sh", "echo hello from global"},
 		},
 	})
-	repoMock.EXPECT().CommitFiles("Set pre-commit hook `test-42` for test/something-2", manifestFile)
+	repoMock.EXPECT().CommitFiles("Set pre-push hook `test-42` for test/something-2", manifestFile)
 	if err := codebase.SetHook("test-42"); err != nil {
 		t.Fail()
 	}
-	b, err = ioutil.ReadFile(filepath.Join(path, "test", "something-2", ".git", "hooks", "pre-commit"))
+	b, err = ioutil.ReadFile(filepath.Join(path, "test", "something-2", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Fail()
 	}
