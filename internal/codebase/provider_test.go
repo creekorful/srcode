@@ -354,12 +354,16 @@ func TestProvider_Clone(t *testing.T) {
 	// We should clone the projects & configure them
 	repoMock := repository_mock.NewMockRepository(mockCtrl)
 	repoProviderMock.EXPECT().
-		Clone("https://example.org/test.git", filepath.Join(targetDir, "test", "12")).Return(repoMock, nil)
+		Clone("https://example.org/test.git", filepath.Join(targetDir, "test", "12"))
+	repoProviderMock.EXPECT().
+		Open(filepath.Join(targetDir, "test", "12")).Return(repoMock, nil)
 	repoMock.EXPECT().SetConfig("user.name", "Aloïs Micard").Return(nil)
 
 	repoMock = repository_mock.NewMockRepository(mockCtrl)
 	repoProviderMock.EXPECT().
-		Clone("git@example.org:example/test.git", filepath.Join(targetDir, "test-another")).Return(repoMock, nil)
+		Clone("git@example.org:example/test.git", filepath.Join(targetDir, "test-another"))
+	repoProviderMock.EXPECT().
+		Open(filepath.Join(targetDir, "test-another")).Return(repoMock, nil)
 	repoMock.EXPECT().SetConfig("user.email", "alois@micard.lu").Return(nil)
 
 	val, err := provider.Clone("test-remote", targetDir, ch)

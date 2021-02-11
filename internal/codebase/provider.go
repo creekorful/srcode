@@ -8,7 +8,6 @@ import (
 	"github.com/creekorful/srcode/internal/manifest"
 	"github.com/creekorful/srcode/internal/repository"
 	"golang.org/x/sync/errgroup"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -223,32 +222,13 @@ func (provider *provider) Clone(url, path string, ch chan<- ProjectEntry) (Codeb
 		project := project
 
 		g.Go(func() error {
-			repo, err := provider.repoProvider.Clone(project.Remote, filepath.Join(path, projectPath))
+			_, err := provider.repoProvider.Clone(project.Remote, filepath.Join(path, projectPath))
 			if err != nil {
 				return err
 			}
 
-			for key, value := range project.Config {
-				if err := repo.SetConfig(key, value); err != nil {
-					return err
-				}
-			}
-
-			// Copy git hook if any
-			if project.Hook != "" {
-				script, err := man.GetScript(projectPath, project.Hook)
-				if err == nil {
-					f, err := os.OpenFile(filepath.Join(codebase.rootPath, projectPath, ".git", "hooks", "pre-push"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
-					if err != nil {
-						return err
-					}
-					defer f.Close()
-
-					// write the content
-					if _, err := io.WriteString(f, strings.Join(script, "\n")); err != nil {
-						return err
-					}
-				}
+			if err := codebase.configureProject(man, projectPath); err != nil {
+				return err
 			}
 
 			if ch != nil {
