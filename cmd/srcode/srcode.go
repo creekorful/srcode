@@ -584,6 +584,11 @@ func (app *app) script(c *cli.Context) error {
 			return err
 		}
 
+		// prevent from adding blank script
+		if len(val) == 0 || (len(val) == 1 && val[0] == "") {
+			return nil
+		}
+
 		script = val
 
 		if reflect.DeepEqual(script, previousScript) || len(script) == 0 {
