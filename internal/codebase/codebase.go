@@ -34,6 +34,7 @@ type ProjectEntry struct {
 // Codebase is a collection of projects
 type Codebase interface {
 	Projects() (map[string]ProjectEntry, error)
+	Manifest() (manifest.Manifest, error)
 	Add(remote, path string, config map[string]string) (manifest.Project, error)
 	Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error
 	LocalPath() string
@@ -84,6 +85,10 @@ func (codebase *codebase) Projects() (map[string]ProjectEntry, error) {
 	}
 
 	return entries, nil
+}
+
+func (codebase *codebase) Manifest() (manifest.Manifest, error) {
+	return codebase.readManifest()
 }
 
 func (codebase *codebase) Add(remote, path string, config map[string]string) (manifest.Project, error) {
@@ -158,9 +163,9 @@ func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, delet
 
 	// pull & push
 	// Allow to fail because may fail if not already pushed (todo better)
-	_ = codebase.repo.Pull("origin", "master")
+	_ = codebase.repo.Pull("origin", "main")
 
-	if err := codebase.repo.Push("origin", "master"); err != nil {
+	if err := codebase.repo.Push("origin", "main"); err != nil {
 		return err
 	}
 

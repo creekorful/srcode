@@ -381,6 +381,25 @@ func TestLsProjects(t *testing.T) {
 	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
 
+	// No projects
+	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{}, nil)
+
+	if err := app.getCliApp().Run([]string{"srcode", "ls"}); err != nil {
+		t.Fail()
+	}
+
+	val := b.String()
+	if !strings.Contains(val, "No projects in codebase") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "srcode add git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe") {
+		t.Fail()
+	}
+
+	b.Reset()
+
+	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+
 	repo1 := repository_mock.NewMockRepository(mockCtrl)
 	repo1.EXPECT().Head().Return("develop", nil)
 	repo1.EXPECT().IsDirty().Return(false, nil)
@@ -405,7 +424,7 @@ func TestLsProjects(t *testing.T) {
 		t.Fail()
 	}
 
-	val := b.String()
+	val = b.String()
 	if !strings.Contains(val, "Contributing/test") {
 		t.Fail()
 	}
@@ -469,8 +488,11 @@ func TestScript(t *testing.T) {
 
 	codebaseProviderMock := codebase_mock.NewMockProvider(mockCtrl)
 
+	b := &strings.Builder{}
+
 	app := app{
 		codebaseProvider: codebaseProviderMock,
+		writer:           b,
 	}
 
 	cwd, err := os.Getwd()
@@ -478,16 +500,25 @@ func TestScript(t *testing.T) {
 		t.FailNow()
 	}
 
-	// test with no enough args should fails
-	if err := app.getCliApp().Run([]string{"srcode", "script"}); err != errWrongScriptUsage {
-		t.Errorf("got %v want %v", err, errWrongScriptUsage)
-	}
-
 	codebaseMock := codebase_mock.NewMockCodebase(mockCtrl)
 
 	// test no project in current directory
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
-	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{}, nil)
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{}, nil)
+	codebaseMock.EXPECT().LocalPath().Return("test-12")
+
+	// test script with no args should print existing scripts
+	if err := app.getCliApp().Run([]string{"srcode", "script"}); err != nil {
+		t.Fail()
+	}
+
+	if b.String() != "No scripts in codebase\n" {
+		t.Fail()
+	}
+
+	// test no project in current directory
+	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{}, nil)
 	codebaseMock.EXPECT().LocalPath().Return("test-12")
 
 	if err := app.getCliApp().Run([]string{"srcode", "script", "test", "@go-test"}); !errors.Is(err, manifest.ErrNoProjectFound) {
@@ -496,7 +527,7 @@ func TestScript(t *testing.T) {
 
 	// test set local command
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
-	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{"test-12": {}}, nil)
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{Projects: map[string]manifest.Project{"test-12": {}}}, nil)
 	codebaseMock.EXPECT().LocalPath().Return("test-12")
 	codebaseMock.EXPECT().SetScript("test", []string{"@go-test"}, false)
 
@@ -506,11 +537,39 @@ func TestScript(t *testing.T) {
 
 	// test set global command
 	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
-	codebaseMock.EXPECT().Projects().Return(map[string]codebase.ProjectEntry{"test-42": {}}, nil)
-	codebaseMock.EXPECT().LocalPath().Return("test-42")
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{Projects: map[string]manifest.Project{"test-42": {}}}, nil)
+	codebaseMock.EXPECT().LocalPath().Return("")
 	codebaseMock.EXPECT().SetScript("go-test", []string{"go test -race -v ./..."}, true)
 
 	if err := app.getCliApp().Run([]string{"srcode", "script", "--global", "go-test", "go", "test", "-race", "-v", "./..."}); err != nil {
+		t.Fail()
+	}
+
+	// test display commands
+	b.Reset()
+
+	codebaseProviderMock.EXPECT().Open(cwd).Return(codebaseMock, nil)
+	codebaseMock.EXPECT().Manifest().Return(manifest.Manifest{
+		Projects: map[string]manifest.Project{"test-42": {Scripts: map[string][]string{"gen": {"@go-gen"}}}},
+		Scripts:  map[string][]string{"go-generate": {"go generate -v ./..."}},
+	}, nil)
+	codebaseMock.EXPECT().LocalPath().Return("test-42")
+
+	if err := app.getCliApp().Run([]string{"srcode", "script"}); err != nil {
+		t.Fail()
+	}
+
+	val := b.String()
+	if !strings.Contains(val, "available global scripts") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "go-generate") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "available local scripts") {
+		t.Fail()
+	}
+	if !strings.Contains(val, "gen") {
 		t.Fail()
 	}
 }

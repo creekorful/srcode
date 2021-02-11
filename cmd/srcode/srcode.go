@@ -29,7 +29,6 @@ var (
 	errWrongAddProjectUsage = errors.New("correct usage: srcode add <remote> [<path>]")
 	errWrongRunUsage        = errors.New("correct usage: srcode run <script>")
 	errWrongBulkGitUsage    = errors.New("correct usage: srcode bulk-git <args>")
-	errWrongScriptUsage     = errors.New("correct usage: srcode script <name> [<script>]")
 	errWrongMvUsage         = errors.New("correct usage: srcode mv <src> <dst>")
 	errWrongRmUsage         = errors.New("correct usage: srcode rm <path>")
 	errWrongHookUsage       = errors.New("correct usage: srcode hook <script>")
@@ -186,9 +185,9 @@ Examples
 			},
 			{
 				Name:      "script",
-				Usage:     "Add a codebase script",
-				Action:    app.setScript,
-				ArgsUsage: "<name> [<script>]",
+				Usage:     "Interact with the codebase scripts",
+				Action:    app.script,
+				ArgsUsage: "[<name>] [<script>]",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{
 						Name:  "global",
@@ -196,8 +195,8 @@ Examples
 					},
 				},
 				Description: `
-Add a script to the codebase, either at global level (--global) or
-at project level.
+Interact with the codebase scripts, either display the existing ones,
+or add new one at global level (--global) or at project level.
 
 Examples
 
@@ -209,6 +208,9 @@ Examples
 
 - Create a project local test script, and edit it using $EDITOR:
   $ srcode script test
+
+- List the existing scripts:
+  $ srcode script
 
 Now you can use 'srcode run test' or 'srcode test' to execute the script
 from project directory.`,
@@ -447,7 +449,8 @@ func (app *app) lsProjects(c *cli.Context) error {
 	}
 
 	if len(projects) == 0 {
-		_, _ = fmt.Fprintln(app.writer, "No projects found")
+		_, _ = fmt.Fprintln(app.writer, "No projects in codebase")
+		_, _ = fmt.Fprintln(app.writer, "Tips: add a project using `srcode add git@github.com:darkspot-org/bathyscaphe.git Darkspot/bathyscaphe`")
 		return nil
 	}
 
@@ -509,24 +512,54 @@ func (app *app) bulkGit(c *cli.Context) error {
 	return nil
 }
 
-func (app *app) setScript(c *cli.Context) error {
-	if c.NArg() < 1 {
-		return errWrongScriptUsage
-	}
-
+func (app *app) script(c *cli.Context) error {
 	cb, err := app.openCodebase()
 	if err != nil {
 		return err
 	}
 
-	// Make sure there's a project at current path
-	projects, err := cb.Projects()
+	man, err := cb.Manifest()
 	if err != nil {
 		return err
 	}
 
-	project, exist := projects[cb.LocalPath()]
-	if !exist {
+	project, exist := man.Projects[cb.LocalPath()]
+
+	// Running script with no arguments will display the existing ones
+	if c.NArg() == 0 {
+		hasScripts := false
+
+		if len(man.Scripts) > 0 {
+			hasScripts = true
+			scripts := getKeys(man.Scripts)
+			_, _ = fmt.Fprintf(app.writer, "available global scripts:\t%s %s %s\n",
+				color.HiWhiteString("["),
+				strings.Join(scripts, ", "),
+				color.HiWhiteString("]"))
+		}
+
+		if exist {
+			if len(project.Scripts) > 0 {
+				hasScripts = true
+				scripts := getKeys(project.Scripts)
+				_, _ = fmt.Fprintf(app.writer, "available local scripts:\t%s %s %s\n",
+					color.HiWhiteString("["),
+					strings.Join(scripts, ", "),
+					color.HiWhiteString("]"))
+			}
+		}
+
+		if !hasScripts {
+			_, _ = fmt.Fprintln(app.writer, "No scripts in codebase")
+		}
+
+		return nil
+	}
+
+	isGlobal := c.Bool("global")
+
+	// Make sure there's a project at current path (if adding local script)
+	if !exist && !isGlobal {
 		return manifest.ErrNoProjectFound
 	}
 
@@ -538,8 +571,11 @@ func (app *app) setScript(c *cli.Context) error {
 	} else {
 		// get previous script definition
 		var previousScript []string
-		if val, exist := project.Project.Scripts[c.Args().First()]; exist {
-			previousScript = val
+
+		if isGlobal {
+			previousScript = man.Scripts[c.Args().First()]
+		} else {
+			previousScript = project.Scripts[c.Args().First()]
 		}
 
 		// otherwise open $EDITOR and read input
@@ -555,7 +591,7 @@ func (app *app) setScript(c *cli.Context) error {
 		}
 	}
 
-	return cb.SetScript(c.Args().First(), script, c.Bool("global"))
+	return cb.SetScript(c.Args().First(), script, isGlobal)
 }
 
 func (app *app) mvProject(c *cli.Context) error {
@@ -684,4 +720,15 @@ func captureInputFromEditor(initialContent []string) ([]string, error) {
 	}
 
 	return strings.Split(strings.TrimSuffix(string(b), "\n"), "\n"), nil
+}
+
+func getKeys(v map[string][]string) []string {
+	keys := make([]string, 0, len(v))
+	for k := range v {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	return keys
 }

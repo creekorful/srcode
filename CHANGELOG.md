@@ -7,16 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.7.0] - 2021-02-10
+## [0.7.1] - 2021-02-11
 
 ## Changed
 
-- Improve output of bulk-git.
-- [#18](https://github.com/creekorful/srcode/issues/18) set-cmd: edit with $EDITOR if command not directly provided.
-- set-cmd: allow edition of existing command.
-- set-cmd: rename to script.
-- [#19](https://github.com/creekorful/srcode/issues/19) script: now we are making script and not just command.
+- cmd/ls: add demo message when running `ls` with no projects.
+- change default branch from master to main.
+- cmd/script: display available scripts when running with no arguments.
+
+## Fixed
+
+- cmd/script: allow adding global script even outside project folder.
+- [#22](https://github.com/creekorful/srcode/issues/22) cmd/script: edition of global script does not set previous content in $EDITOR.
+
+## [0.7.0] - 2021-02-10
+
+## Added
+
 - [#20](https://github.com/creekorful/srcode/issues/20) add git hook support.
+
+## Changed
+
+- cmd/bulk-git: Improve output.
+- [#18](https://github.com/creekorful/srcode/issues/18) cmd/set-cmd: edit with $EDITOR if command not directly provided.
+- cmd/set-cmd: allow edition of existing command.
+- cmd/set-cmd: rename to script.
+- [#19](https://github.com/creekorful/srcode/issues/19) cmd/script: now we are making script and not just command.
 
 ## [0.6.0] - 2021-02-09
 
@@ -81,7 +97,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Initial pre-release.
 
-[Unreleased]: https://github.com/creekorful/srcode/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/creekorful/srcode/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/creekorful/srcode/compare/v0.7.1...HEAD
 [0.7.0]: https://github.com/creekorful/srcode/compare/v0.7.0...HEAD
 [0.6.0]: https://github.com/creekorful/srcode/compare/v0.6.0...HEAD
 [0.5.0]: https://github.com/creekorful/srcode/compare/v0.5.0...HEAD
