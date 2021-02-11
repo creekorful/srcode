@@ -360,7 +360,7 @@ func (codebase *codebase) SetScript(name string, script []string, global bool) e
 	}
 
 	if err := codebase.repo.CommitFiles(
-		fmt.Sprintf("Add script `%s` to /%s", name, codebase.localPath),
+		fmt.Sprintf("Add script `%s` to %s", name, codebase.localPath),
 		manifestFile,
 	); err != nil {
 		return err

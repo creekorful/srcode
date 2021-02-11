@@ -658,7 +658,7 @@ func TestCodebase_SetScript(t *testing.T) {
 			}).
 		Return(nil)
 
-	repoMock.EXPECT().CommitFiles("Add script `test` to /test/something", "manifest.json")
+	repoMock.EXPECT().CommitFiles("Add script `test` to test/something", "manifest.json")
 
 	if err := codebase.SetScript("test", []string{"test"}, false); err != nil {
 		t.Fail()
