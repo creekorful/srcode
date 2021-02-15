@@ -320,7 +320,7 @@ func TestCodebase_Sync(t *testing.T) {
 	}
 
 	// make sure hook is copied
-	b, err := ioutil.ReadFile(filepath.Join(dir, "test-12", ".git", "hooks", "pre-commit"))
+	b, err := ioutil.ReadFile(filepath.Join(dir, "test-12", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -329,7 +329,7 @@ func TestCodebase_Sync(t *testing.T) {
 	}
 
 	// make sure hook is copied
-	b, err = ioutil.ReadFile(filepath.Join(dir, "test", "c", "d", ".git", "hooks", "pre-commit"))
+	b, err = ioutil.ReadFile(filepath.Join(dir, "test", "c", "d", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Error(err)
 	}
@@ -430,7 +430,7 @@ func TestCodebase_Run(t *testing.T) {
 
 	manProviderMock.EXPECT().
 		Read(filepath.Join("test-dir", metaDir, manifestFile)).
-		Times(5).
+		Times(6).
 		Return(manifest.Manifest{
 			Projects: map[string]manifest.Project{
 				"test/something": {
@@ -438,16 +438,18 @@ func TestCodebase_Run(t *testing.T) {
 						"greet-local":    {"echo Hello from local script"},
 						"greet-global":   {"@greet"},
 						"invalid-global": {"@invalid"},
+						"greet-custom":   {"@greet-custom"},
 					},
 				},
 			},
 			Scripts: map[string][]string{
-				"greet": {"echo Hello from global script"},
+				"greet":        {"echo Hello from global script"},
+				"greet-custom": {"echo Hello $2 $1"},
 			},
 		}, nil)
 
 	// Try to run script from a non-project directory
-	if err := codebase.Run("greet-local", b); !errors.Is(err, manifest.ErrNoProjectFound) {
+	if err := codebase.Run("greet-local", nil, b); !errors.Is(err, manifest.ErrNoProjectFound) {
 		t.Fail()
 	}
 
@@ -455,27 +457,34 @@ func TestCodebase_Run(t *testing.T) {
 	codebase.localPath = "test/something"
 
 	// Try to run an non existing local script
-	if err := codebase.Run("blah", b); !errors.Is(err, manifest.ErrScriptNotFound) {
+	if err := codebase.Run("blah", nil, b); !errors.Is(err, manifest.ErrScriptNotFound) {
 		t.Fail()
 	}
 
 	// Try to run an non existing global script
-	if err := codebase.Run("invalid-global", b); !errors.Is(err, manifest.ErrScriptNotFound) {
+	if err := codebase.Run("invalid-global", nil, b); !errors.Is(err, manifest.ErrScriptNotFound) {
 		t.Fail()
 	}
 
 	// Try to run a local script
 	b.Reset()
-	if err := codebase.Run("greet-local", b); err != nil || b.String() != "Hello from local script\n" {
+	if err := codebase.Run("greet-local", nil, b); err != nil || b.String() != "Hello from local script\n" {
 		t.Errorf("error: %v", err)
 		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from local script")
 	}
 
 	// Try to run a global script
 	b.Reset()
-	if err := codebase.Run("greet-global", b); err != nil || b.String() != "Hello from global script\n" {
+	if err := codebase.Run("greet-global", nil, b); err != nil || b.String() != "Hello from global script\n" {
 		t.Errorf("error: %v", err)
 		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello from global script")
+	}
+
+	// Try to run a global custom script
+	b.Reset()
+	if err := codebase.Run("greet-custom", []string{"param1", "param2"}, b); err != nil || b.String() != "Hello param2 param1\n" {
+		t.Errorf("error: %v", err)
+		t.Errorf("got: '%s' want: '%s'", b.String(), "Hello param2 param1")
 	}
 }
 
@@ -649,7 +658,7 @@ func TestCodebase_SetScript(t *testing.T) {
 			}).
 		Return(nil)
 
-	repoMock.EXPECT().CommitFiles("Add script `test` to /test/something", "manifest.json")
+	repoMock.EXPECT().CommitFiles("Add script `test` to test/something", "manifest.json")
 
 	if err := codebase.SetScript("test", []string{"test"}, false); err != nil {
 		t.Fail()
@@ -1032,11 +1041,11 @@ func TestCodebase_SetHook(t *testing.T) {
 			"global-42": {"#/bin/sh", "echo hello from global"},
 		},
 	})
-	repoMock.EXPECT().CommitFiles("Set pre-commit hook `test-12` for test/something-1", manifestFile)
+	repoMock.EXPECT().CommitFiles("Set pre-push hook `test-12` for test/something-1", manifestFile)
 	if err := codebase.SetHook("test-12"); err != nil {
 		t.Fail()
 	}
-	b, err := ioutil.ReadFile(filepath.Join(path, "test", "something-1", ".git", "hooks", "pre-commit"))
+	b, err := ioutil.ReadFile(filepath.Join(path, "test", "something-1", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Fail()
 	}
@@ -1087,11 +1096,11 @@ func TestCodebase_SetHook(t *testing.T) {
 			"global-42": {"#/bin/sh", "echo hello from global"},
 		},
 	})
-	repoMock.EXPECT().CommitFiles("Set pre-commit hook `test-42` for test/something-2", manifestFile)
+	repoMock.EXPECT().CommitFiles("Set pre-push hook `test-42` for test/something-2", manifestFile)
 	if err := codebase.SetHook("test-42"); err != nil {
 		t.Fail()
 	}
-	b, err = ioutil.ReadFile(filepath.Join(path, "test", "something-2", ".git", "hooks", "pre-commit"))
+	b, err = ioutil.ReadFile(filepath.Join(path, "test", "something-2", ".git", "hooks", "pre-push"))
 	if err != nil {
 		t.Fail()
 	}

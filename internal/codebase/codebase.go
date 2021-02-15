@@ -38,7 +38,7 @@ type Codebase interface {
 	Add(remote, path string, config map[string]string) (manifest.Project, error)
 	Sync(delete bool, addedChan chan<- ProjectEntry, deletedChan chan<- ProjectEntry) error
 	LocalPath() string
-	Run(scriptName string, writer io.Writer) error
+	Run(scriptName string, args []string, writer io.Writer) error
 	BulkGIT(args []string, writer io.Writer) error
 	SetScript(name string, script []string, global bool) error
 	MoveProject(oldPath, newPath string) error
@@ -206,36 +206,9 @@ func (codebase *codebase) Sync(delete bool, addedChan chan<- ProjectEntry, delet
 					_, _ = codebase.repoProvider.Clone(project.Remote, filepath.Join(codebase.rootPath, p))
 				}
 
-				// (Re-)Apply the configuration
-				if len(project.Config) > 0 {
-					repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, p))
-					if err != nil {
-						return err
-					}
-
-					// No matter what re-apply configuration to currently defined projects
-					for key, value := range project.Config {
-						if err := repo.SetConfig(key, value); err != nil {
-							return err
-						}
-					}
-				}
-
-				// Apply hook if any
-				if project.Hook != "" {
-					script, err := man.GetScript(p, project.Hook)
-					if err == nil {
-						f, err := os.OpenFile(filepath.Join(codebase.rootPath, p, ".git", "hooks", "pre-commit"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
-						if err != nil {
-							return err
-						}
-						defer f.Close()
-
-						// write the content
-						if _, err := io.WriteString(f, strings.Join(script, "\n")); err != nil {
-							return err
-						}
-					}
+				// (Re-)Configure the project
+				if err := codebase.configureProject(man, p); err != nil {
+					return err
 				}
 
 				return nil
@@ -280,7 +253,7 @@ func (codebase *codebase) LocalPath() string {
 	return codebase.localPath
 }
 
-func (codebase *codebase) Run(scriptName string, writer io.Writer) error {
+func (codebase *codebase) Run(scriptName string, args []string, writer io.Writer) error {
 	man, err := codebase.readManifest()
 	if err != nil {
 		return err
@@ -304,7 +277,10 @@ func (codebase *codebase) Run(scriptName string, writer io.Writer) error {
 		return err
 	}
 
-	cmd := exec.Command("sh", path)
+	cmdArgs := []string{path}
+	cmdArgs = append(cmdArgs, args...)
+
+	cmd := exec.Command("sh", cmdArgs...)
 	cmd.Stdout = writer
 	cmd.Stderr = writer
 
@@ -384,7 +360,7 @@ func (codebase *codebase) SetScript(name string, script []string, global bool) e
 	}
 
 	if err := codebase.repo.CommitFiles(
-		fmt.Sprintf("Add script `%s` to /%s", name, codebase.localPath),
+		fmt.Sprintf("Add script `%s` to %s", name, codebase.localPath),
 		manifestFile,
 	); err != nil {
 		return err
@@ -485,7 +461,7 @@ func (codebase *codebase) SetHook(scriptName string) error {
 	}
 
 	// copy the script to .git/hooks directory
-	f, err := os.OpenFile(filepath.Join(codebase.rootPath, codebase.localPath, ".git", "hooks", "pre-commit"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
+	f, err := os.OpenFile(filepath.Join(codebase.rootPath, codebase.localPath, ".git", "hooks", "pre-push"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
 	if err != nil {
 		return err
 	}
@@ -509,7 +485,7 @@ func (codebase *codebase) SetHook(scriptName string) error {
 	}
 
 	// Commit the changes
-	if err := codebase.repo.CommitFiles(fmt.Sprintf("Set pre-commit hook `%s` for %s", scriptName, codebase.localPath), manifestFile); err != nil {
+	if err := codebase.repo.CommitFiles(fmt.Sprintf("Set pre-push hook `%s` for %s", scriptName, codebase.localPath), manifestFile); err != nil {
 		return err
 	}
 
@@ -527,4 +503,44 @@ func (codebase *codebase) readManifest() (manifest.Manifest, error) {
 
 func (codebase *codebase) writeManifest(man manifest.Manifest) error {
 	return codebase.manProvider.Write(filepath.Join(filepath.Join(codebase.rootPath, metaDir, manifestFile)), man)
+}
+
+func (codebase *codebase) configureProject(man manifest.Manifest, path string) error {
+	project, exist := man.Projects[path]
+	if !exist {
+		return manifest.ErrNoProjectFound
+	}
+
+	// (Re-)Apply the configuration
+	if len(project.Config) > 0 {
+		repo, err := codebase.repoProvider.Open(filepath.Join(codebase.rootPath, path))
+		if err != nil {
+			return err
+		}
+
+		for key, value := range project.Config {
+			if err := repo.SetConfig(key, value); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Apply hook if any
+	if project.Hook != "" {
+		script, err := man.GetScript(path, project.Hook)
+		if err == nil {
+			f, err := os.OpenFile(filepath.Join(codebase.rootPath, path, ".git", "hooks", "pre-push"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0750)
+			if err != nil {
+				return err
+			}
+			defer f.Close()
+
+			// write the content
+			if _, err := io.WriteString(f, strings.Join(script, "\n")); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

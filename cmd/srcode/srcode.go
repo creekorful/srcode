@@ -251,16 +251,16 @@ Examples
 			},
 			{
 				Name:      "hook",
-				Usage:     "Set project Git hook",
+				Usage:     "Set project Git pre-push hook",
 				Action:    app.hook,
 				ArgsUsage: "<script>",
 				Description: `
-Set the Git hook of current project. This will lookup for the script with
+Set the Git pre-push hook for current project. This will lookup for the script with
 given name, and copy the content to the .git/hooks folder.
 
 Examples
 
-- Set Git hook of current project:
+- Make Git run lint script before pushing the commit:
   $ srcode hook lint`,
 			},
 		},
@@ -434,7 +434,7 @@ func (app *app) runScript(c *cli.Context) error {
 		return err
 	}
 
-	return cb.Run(c.Args().First(), app.writer)
+	return cb.Run(c.Args().First(), c.Args().Tail(), app.writer)
 }
 
 func (app *app) lsProjects(c *cli.Context) error {
@@ -582,6 +582,11 @@ func (app *app) script(c *cli.Context) error {
 		val, err := captureInputFromEditor(previousScript)
 		if err != nil {
 			return err
+		}
+
+		// prevent from adding blank script
+		if len(val) == 0 || (len(val) == 1 && val[0] == "") {
+			return nil
 		}
 
 		script = val
